@@ -336,7 +336,7 @@ Nếu chủ đề liên quan đến MÔN TIẾNG TRUNG (Tiếng Hán Giản Th�
 ### 1. CHUẨN CHỮ VIẾT, PHIÊN ÂM VÀ DỊCH NGHĨA
 - **Chữ Hán:** BẮT BUỘC dùng CHỮ HÁN GIẢN THỂ (简体字) chuẩn mực quốc tế, không lẫn lộn chữ Phồn thể.
 - **Phiên âm Pinyin:** Luôn kèm phiên âm Pinyin chuẩn có dấu thanh điệu (ā, á, ǎ, à, ē, é, ě, è, ī, í, ǐ, ì, ō, ó, ǒ, ò, ū, ú, ǔ, ù, ǖ, ǘ, ǚ, ǜ) khi phân tích từ vựng, ngữ pháp.
-- **Nghĩa tiếng Việt:** Luôn có phần giải nghĩa tiếng Việt đối chiếu rõ ràng.
+- **Nghĩa tiếng Việt:** Chỉ thêm khi người dùng yêu cầu riêng bản dịch hoặc phần đối chiếu; không chèn vào nội dung SKKN tiếng Trung giản thể.
 
 ### 2. QUY TẮC MINH HỌA LỖI SAI & ĐỐI CHIẾU CHUẨN MỰC
 Trong mỗi giải pháp và phân tích thực trạng:
@@ -725,4 +725,3 @@ Cấu trúc SKKN bậc đại học/cao đẳng phải có thêm:
 - [ ] Có so sánh với mô hình quốc tế?
 - [ ] Có phần phản biện/hạn chế?
 `;
-

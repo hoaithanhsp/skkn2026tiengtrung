@@ -533,6 +533,16 @@ const App: React.FC = () => {
 
   const isCustomFlow = validCustomSections.length > 0;
 
+  const isChineseSimplifiedHighSchoolSkkn = useMemo(() => {
+    const context = `${userInfo.subject} ${userInfo.level} ${customTemplateData?.name || ''}`.toLocaleLowerCase('vi-VN');
+    return userInfo.level === 'THPT' && (
+      context.includes('tiếng trung') ||
+      context.includes('tiếng hán') ||
+      context.includes('中文') ||
+      context.includes('汉语')
+    );
+  }, [customTemplateData?.name, userInfo.level, userInfo.subject]);
+
 
 
   const currentStepsInfo = useMemo(() => {
@@ -1320,6 +1330,7 @@ Lập DÀN Ý CHI TIẾT cho một đề tài SKKN dựa trên thông tin tôi c
 - Quy định khi triển khai chi tiết:
   + Mục I (THÔNG TIN CHUNG VỀ SÁNG KIẾN): Sẽ viết bằng TIẾNG VIỆT.
   + Bắt đầu từ TÓM TẮT SÁNG KIẾN (中文摘要) và toàn bộ các chương tiếp theo (Chương I, Chương II, Chương III, Chương IV, Chương V, Tài liệu tham khảo, Phụ lục): BẮT BUỘC SẼ VIẾT HOÀN TOÀN BẰNG TIẾNG TRUNG GIẢN THỂ (简体中文).
+  + Với SKKN Tiếng Trung THPT: từ 中文摘要 trở đi, không được chèn phụ đề, bản dịch, chú thích hoặc bất kỳ chữ tiếng Việt nào.
 
 
 
@@ -2433,6 +2444,9 @@ QUAN TRỌNG:
 
         }));
 
+      }, () => {
+        generatedText = "";
+        setState(prev => ({ ...prev, fullDocument: '' }));
       });
 
       // Post-validation: Kiểm tra dàn ý có chứa nội dung vượt cấp không
@@ -2557,6 +2571,9 @@ QUAN TRỌNG:
 
         }));
 
+      }, () => {
+        generatedText = "";
+        setState(prev => ({ ...prev, fullDocument: '' }));
       });
 
       // Post-validation cho dàn ý chỉnh sửa
@@ -2638,6 +2655,7 @@ Phần này trong mẫu gốc được định nghĩa là: ${firstSection.sugges
 🌐 QUY ĐỊNH NGÔN NGỮ CHO PHẦN NÀY:
 Phần này là "THÔNG TIN CHUNG VỀ SÁNG KIẾN" nên BẮT BUỘC PHẢI ĐƯỢC VIẾT BẰNG TIẾNG VIỆT (Trình bày đầy đủ: 1. Tên sáng kiến; 2. Lĩnh vực áp dụng; 3. Tác giả, chức vụ, đơn vị công tác; 4. Đối tượng áp dụng; 5. Thời gian áp dụng...).
 Bắt đầu từ phần tiếp theo (Tóm tắt sáng kiến) mới bắt đầu viết bằng Tiếng Trung Giản Thể.
+${isChineseSimplifiedHighSchoolSkkn ? `Không được chèn 中文摘要 hoặc bất kỳ nội dung tiếng Trung nào ở bước này.` : ''}
 
 
 
@@ -2795,7 +2813,8 @@ Tiếp tục viết chi tiết nội dung phần tiếp theo của SKKN: **${nex
 Từ phần này trở đi (bao gồm Tóm tắt sáng kiến và tất cả các Chương I, II, III, IV, V, Tài liệu tham khảo, Phụ lục), TOÀN BỘ NỘI DUNG PHẢI ĐƯỢC VIẾT HOÀN TOÀN BẰNG TIẾNG TRUNG GIẢN THỂ (简体中文)!
 - Văn phong: Ngữ văn học thuật Hán ngữ chuẩn mực, câu văn lưu loát, thuật ngữ sư phạm Hán ngữ chính xác.
 - Nội dung: Toàn bộ các đề mục, nội dung phân tích, luận cứ lý luận, phân tích lỗi sai ngôn ngữ, giải pháp sư phạm, bài tập thực hành, bảng số liệu thực nghiệm và kết luận... ĐỀU PHẢI VIẾT BẰNG TIẾNG TRUNG GIẢN THỂ (简体字).
-- Tiêu đề mục: Dùng tiếng Trung giản thể kèm phụ đề tiếng Việt (Ví dụ: 中文摘要 (Tóm tắt sáng kiến), 第一章 引言 (Chương I: Mở đầu)...) để hội đồng dễ đối chiếu.
+- Tiêu đề mục: Chỉ dùng tiếng Trung giản thể, không kèm phụ đề tiếng Việt; ví dụ: 中文摘要, 第一章 引言.
+- Không được viết bất kỳ chữ tiếng Việt nào trong phần này, kể cả câu dẫn, chú thích, bản dịch, bảng biểu, tài liệu tham khảo và phụ lục.
 
 
 

@@ -24,6 +24,7 @@ export const createGoogleAiClient = (
 export type ApiErrorType =
   | 'MODEL_OVERLOADED'   // 500/503/504/overloaded → cho phép fallback
   | 'NOT_FOUND'          // 404 → cho phép fallback
+  | 'STREAM_INTERRUPTED' // Phản hồi stream bị cắt giữa JSON → cho phép fallback
   | 'QUOTA_EXCEEDED'     // 429 → dừng ngay, KHÔNG đánh dấu key invalid
   | 'RATE_LIMIT'         // rate limit → dừng ngay
   | 'INVALID_API_KEY'    // 401/API_KEY_INVALID → dừng ngay
@@ -33,7 +34,7 @@ export type ApiErrorType =
   | 'UNKNOWN';
 
 // Các lỗi CHO PHÉP chuyển model fallback
-const FALLBACKABLE_ERRORS: ApiErrorType[] = ['MODEL_OVERLOADED', 'NOT_FOUND'];
+const FALLBACKABLE_ERRORS: ApiErrorType[] = ['MODEL_OVERLOADED', 'NOT_FOUND', 'STREAM_INTERRUPTED'];
 
 export const parseApiError = (error: any): ApiErrorType => {
   const errorMessage = (error?.message || error?.toString() || '').toLowerCase();
@@ -54,6 +55,14 @@ export const parseApiError = (error: any): ApiErrorType => {
   if (statusCode === 404 || errorMessage.includes('not_found') ||
     errorMessage.includes('not found') || errorString.includes('404')) {
     return 'NOT_FOUND';
+  }
+
+  // SDK có thể ném lỗi này nếu kết nối stream bị đóng giữa một event JSON.
+  // Đây là lỗi tạm thời của stream, không phải lỗi API key hay dữ liệu người dùng.
+  if (errorMessage.includes('incomplete json segment') ||
+    errorMessage.includes('unexpected end of json input') ||
+    errorMessage.includes('unterminated string in json')) {
+    return 'STREAM_INTERRUPTED';
   }
 
   // 401 / API_KEY_INVALID → dừng ngay
@@ -125,6 +134,17 @@ export const getFriendlyErrorMessage = (error: any): { type: string; title: stri
         suggestions: [
           '🔄 App sẽ tự động chuyển sang model dự phòng',
           '📋 Kiểm tra phiên bản model trong Cài đặt'
+        ]
+      };
+
+    case 'STREAM_INTERRUPTED':
+      return {
+        type: 'stream_interrupted',
+        title: '🔄 Phản hồi AI bị gián đoạn',
+        message: 'Kết nối tới model bị ngắt khi đang nhận phản hồi. App đang thử model dự phòng.',
+        suggestions: [
+          '🔄 App sẽ tự động thử lại bằng model dự phòng',
+          '⏳ Nếu vẫn lặp lại, hãy thử lại sau ít phút'
         ]
       };
 
@@ -439,7 +459,11 @@ export const sendSinglePromptStream = async (message: string, onChunk: (text: st
   throw lastError || new Error("Tất cả models đều thất bại. Vui lòng thử lại sau.");
 };
 
-export const sendMessageStream = async (message: string, onChunk: (text: string) => void) => {
+export const sendMessageStream = async (
+  message: string,
+  onChunk: (text: string) => void,
+  onRetry?: () => void,
+) => {
   if (!currentApiKey) {
     throw new Error("Không có API Key. Vui lòng nhập API key trong phần Cài đặt.");
   }
@@ -534,6 +558,7 @@ export const sendMessageStream = async (message: string, onChunk: (text: string)
         currentAbortController = null;
         throw error;
       }
+      onRetry?.();
       console.log(`⏭️ Lỗi ${errorType} — thử model tiếp theo...`);
       continue;
     }
