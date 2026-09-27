@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 
 import { UserInfo, GenerationStep, GenerationState, SKKNTemplate, SolutionsState, WizardStep } from './types';
 
-import { STEPS_INFO, SOLUTION_MODE_PROMPT, FALLBACK_MODELS, AGENT_PLATFORM_MODELS, HIGHER_ED_LEVELS, HIGHER_ED_SYSTEM_INSTRUCTION, type AiProvider } from './constants';
+import { STEPS_INFO, SOLUTION_MODE_PROMPT, FALLBACK_MODELS, HIGHER_ED_LEVELS, HIGHER_ED_SYSTEM_INSTRUCTION, type AiProvider } from './constants';
 
 import { initializeGeminiChat, sendMessageStream, getFriendlyErrorMessage, parseApiError, getChatHistory, setChatHistory, abortCurrentStream } from './services/geminiService';
 
@@ -192,7 +192,10 @@ const App: React.FC = () => {
 
     // Load API key từ localStorage hoặc .env
 
-    const savedKey = localStorage.getItem('gemini_api_key');
+    const storedProvider = (localStorage.getItem('google_ai_provider') || 'gemini') as AiProvider;
+    const savedKey = storedProvider === 'agent-platform'
+      ? localStorage.getItem('agent_platform_api_key') || localStorage.getItem('gemini_api_key')
+      : localStorage.getItem('gemini_api_key');
 
     const savedModel = localStorage.getItem('selected_model');
 
@@ -231,8 +234,15 @@ const App: React.FC = () => {
 
 
     // Load provider
-    const savedProvider = (localStorage.getItem('google_ai_provider') || 'gemini') as AiProvider;
+    const savedProvider: AiProvider = storedProvider === 'agent-platform' ? 'gemini' : storedProvider;
     setCurrentProvider(savedProvider);
+
+    if (storedProvider === 'agent-platform' && savedKey) {
+      localStorage.setItem('gemini_api_key', savedKey);
+      localStorage.setItem('google_ai_provider', 'gemini');
+      localStorage.setItem('google_ai_provider_selection_source', 'migration');
+      localStorage.setItem('selected_model', FALLBACK_MODELS[0]);
+    }
 
     // Đồng bộ key đã lưu vào apiKeyManager để tránh xoay nhầm sang backup key cũ
     if (savedKey && savedProvider === 'gemini') {
@@ -240,9 +250,8 @@ const App: React.FC = () => {
       apiKeyManager.setActiveKey(savedKey);
     }
 
-    if (savedModel) {
-      const validModels = savedProvider === 'agent-platform' ? [...AGENT_PLATFORM_MODELS] : FALLBACK_MODELS;
-      if (validModels.includes(savedModel)) {
+    if (savedModel && storedProvider !== 'agent-platform') {
+      if (FALLBACK_MODELS.includes(savedModel)) {
         setSelectedModel(savedModel);
       }
     }
@@ -288,15 +297,19 @@ const App: React.FC = () => {
 
 
   const handleSaveApiKey = (key: string, model: string, provider?: AiProvider) => {
-    const resolvedProvider = provider || 'gemini';
+    const resolvedProvider: AiProvider = provider === 'agent-platform' ? 'gemini' : (provider || 'gemini');
+    const resolvedModel = FALLBACK_MODELS.includes(model) ? model : FALLBACK_MODELS[0];
     // Key đã được lưu riêng theo provider bởi ApiKeyModal
     setApiKey(key);
-    setSelectedModel(model);
+    setSelectedModel(resolvedModel);
     setCurrentProvider(resolvedProvider);
     setShowApiModal(false);
 
     // 🆕 ĐỒNG BỘ VÀO apiKeyManager để không bị xoay nhầm sang key cũ đã chết
     if (resolvedProvider === 'gemini') {
+      localStorage.setItem('gemini_api_key', key);
+      localStorage.setItem('google_ai_provider', 'gemini');
+      localStorage.setItem('selected_model', resolvedModel);
       apiKeyManager.addKey(key, 'Key của tôi');
       apiKeyManager.setActiveKey(key);
     }
@@ -305,7 +318,7 @@ const App: React.FC = () => {
     if (state.error) {
       setState(prev => ({ ...prev, error: null }));
     }
-    initializeGeminiChat(key, model, resolvedProvider);
+    initializeGeminiChat(key, resolvedModel, resolvedProvider);
   };
 
 
@@ -857,7 +870,7 @@ const App: React.FC = () => {
 
       if (savedKey) {
 
-        initializeGeminiChat(savedKey, savedModel || undefined, (localStorage.getItem('google_ai_provider') || 'gemini') as AiProvider);
+        initializeGeminiChat(savedKey, FALLBACK_MODELS.includes(savedModel || '') ? savedModel : undefined, 'gemini');
 
         // Khôi phục history SAU khi init (vì init reset history)
 
@@ -2651,7 +2664,7 @@ QUAN TRỌNG:
       // Post-validation cho dàn ý chỉnh sửa
       const gradeMatch2 = userInfo.grade.match(/\d+/);
       const gradeNum2 = gradeMatch2 ? gradeMatch2[0] : '';
-      if (gradeNum2 && !isHigherEd) {
+      if (gradeNum2 && !HIGHER_ED_LEVELS.includes(userInfo.level)) {
         const validation2 = curriculumValidator.validateOutline(
           userInfo.subject, gradeNum2, generatedText
         );

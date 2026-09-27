@@ -11,9 +11,7 @@ export const createGoogleAiClient = (
   provider: AiProvider = 'gemini',
 ): GoogleGenAI => {
   if (provider === 'agent-platform') {
-    // Cờ kỹ thuật của Google Gen AI SDK để định tuyến tới
-    // aiplatform.googleapis.com trong chế độ API key.
-    return new GoogleGenAI({ vertexai: true, apiKey });
+    console.warn('Agent Platform browser mode dùng Gemini API để xác thực bằng API key.');
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -112,6 +110,19 @@ export const isFallbackableError = (errorType: ApiErrorType, provider: AiProvide
 
 // Hàm tạo thông báo lỗi thân thiện
 export const getFriendlyErrorMessage = (error: any): { type: string; title: string; message: string; suggestions: string[] } => {
+  const rawError = String(error?.message || '') + ' ' + JSON.stringify(error).toLowerCase();
+  if (rawError.includes('api keys are not supported by this api') && rawError.includes('oauth2')) {
+    return {
+      type: 'authentication_configuration',
+      title: '⚙️ Cấu hình xác thực không phù hợp',
+      message: 'Yêu cầu đang được gửi tới endpoint cần OAuth2, trong khi app chỉ có API key.',
+      suggestions: [
+        '🔑 Mở Cài đặt API Key và chọn Gemini API',
+        '🔄 Lưu lại cấu hình rồi tải lại trang',
+        '🛠️ Nếu cần Agent Platform trực tiếp, phải dùng backend có OAuth2/ADC; không gửi token đó từ trình duyệt'
+      ]
+    };
+  }
   const errorType = parseApiError(error);
 
   switch (errorType) {

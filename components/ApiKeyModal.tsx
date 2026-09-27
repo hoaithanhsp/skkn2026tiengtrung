@@ -55,15 +55,20 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onClos
     // Load từ localStorage khi modal mở
     useEffect(() => {
         if (isOpen) {
-            const savedProvider = (localStorage.getItem('google_ai_provider') || 'gemini') as AiProvider;
+            const storedProvider = (localStorage.getItem('google_ai_provider') || 'gemini') as AiProvider;
+            const savedProvider: AiProvider = storedProvider === 'agent-platform' ? 'gemini' : storedProvider;
+            if (storedProvider === 'agent-platform') {
+                const legacyKey = localStorage.getItem('agent_platform_api_key');
+                if (legacyKey && !localStorage.getItem('gemini_api_key')) {
+                    localStorage.setItem('gemini_api_key', legacyKey);
+                }
+                localStorage.setItem('google_ai_provider', 'gemini');
+                localStorage.setItem('google_ai_provider_selection_source', 'migration');
+                localStorage.setItem('selected_model', getDefaultModel('gemini'));
+            }
             setProvider(savedProvider);
 
-            // Load key theo provider
-            if (savedProvider === 'agent-platform') {
-                setApiKey(localStorage.getItem('agent_platform_api_key') || '');
-            } else {
-                setApiKey(localStorage.getItem('gemini_api_key') || '');
-            }
+            setApiKey(localStorage.getItem('gemini_api_key') || '');
 
             // Load model
             const savedModel = localStorage.getItem('selected_model');
@@ -182,21 +187,23 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onClos
                                 </div>
                             </button>
                             <button
-                                onClick={() => handleProviderChange('agent-platform')}
-                                className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all text-left ${provider === 'agent-platform'
-                                    ? 'border-purple-500 bg-purple-50 shadow-md'
-                                    : 'border-gray-200 bg-white hover:border-gray-300'
-                                    }`}
+                                type="button"
+                                disabled
+                                title="Agent Platform trực tiếp cần OAuth2/ADC và không thể dùng API key trong trình duyệt"
+                                className="flex items-center gap-2 p-3 rounded-lg border-2 border-gray-200 bg-gray-50 text-left opacity-60 cursor-not-allowed"
                             >
-                                <Server className={`w-5 h-5 ${provider === 'agent-platform' ? 'text-purple-600' : 'text-gray-400'}`} />
+                                <Server className="w-5 h-5 text-gray-400" />
                                 <div>
-                                    <div className={`font-semibold text-sm ${provider === 'agent-platform' ? 'text-purple-700' : 'text-gray-700'}`}>
+                                    <div className="font-semibold text-sm text-gray-700">
                                         Agent Platform API
                                     </div>
-                                    <div className="text-xs text-gray-500">Google Cloud</div>
+                                    <div className="text-xs text-gray-500">Cần OAuth2 khi gọi trực tiếp</div>
                                 </div>
                             </button>
                         </div>
+                        <p className="text-xs text-amber-700 mt-2">
+                            Agent Platform được dùng qua backend có OAuth2/ADC; bản web này dùng Gemini API với API key.
+                        </p>
                     </div>
 
                     {/* Model Selection — lọc theo provider */}
@@ -273,6 +280,11 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onClos
                             🔑 {provider === 'agent-platform' ? 'Agent Platform' : 'Gemini'} API Key {' '}
                             {hasEnvKeys && provider === 'gemini' && <span className="text-green-600 font-normal">(Tùy chọn - đã có key mặc định)</span>}
                         </label>
+                        {provider === 'agent-platform' && (
+                            <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                                Bản web không có OAuth2/ADC để gọi trực tiếp Agent Platform. Khi lưu, app sẽ dùng API key qua Gemini API để tránh lỗi 401.
+                            </div>
+                        )}
                         <input
                             type="password"
                             value={apiKey}
@@ -362,9 +374,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onClos
                             ) : (
                                 <>
                                     <ol className="text-sm text-amber-700 space-y-1 list-decimal list-inside">
-                                        <li>Truy cập Google Cloud Console</li>
-                                        <li>Bật Agent Platform API</li>
-                                        <li>Tạo API Key với quyền Agent Platform</li>
+                                        <li>Dùng API key Gemini từ Google AI Studio</li>
+                                        <li>Chọn Gemini API nếu muốn dùng trực tiếp bằng API key</li>
+                                        <li>Agent Platform chuẩn cần OAuth2/ADC, không dùng API key ở trình duyệt</li>
                                         <li>Copy key và dán vào ô trên</li>
                                     </ol>
                                     <a
@@ -374,7 +386,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onClos
                                         className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
                                     >
                                         <ExternalLink size={16} />
-                                        Lấy Agent Platform API Key
+                                        Xem hướng dẫn Agent Platform
                                     </a>
                                 </>
                             )}
