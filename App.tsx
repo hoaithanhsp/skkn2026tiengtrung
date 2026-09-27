@@ -1315,6 +1315,13 @@ NHIỆM VỤ CỦA BẠN:
 
 Lập DÀN Ý CHI TIẾT cho một đề tài SKKN dựa trên thông tin tôi cung cấp. Dàn ý phải đầy đủ, cụ thể, có độ sâu và đảm bảo 4 tiêu chí: Tính MỚI, Tính KHOA HỌC, Tính KHẢ THI, Tính HIỆU QUẢ.
 
+🌐 QUY ĐỊNH NGÔN NGỮ KHI LẬP DÀN Ý (BẮT BUỘC TUÂN THỦ):
+- BẢN DÀN Ý NÀY PHẢI ĐƯỢC VIẾT HOÀN TOÀN BẰNG TIẾNG VIỆT (để giáo viên và hội đồng chấm thẩm định khung sườn logic và cấu trúc phương pháp).
+- Quy định khi triển khai chi tiết:
+  + Mục I (THÔNG TIN CHUNG VỀ SÁNG KIẾN): Sẽ viết bằng TIẾNG VIỆT.
+  + Bắt đầu từ TÓM TẮT SÁNG KIẾN (中文摘要) và toàn bộ các chương tiếp theo (Chương I, Chương II, Chương III, Chương IV, Chương V, Tài liệu tham khảo, Phụ lục): BẮT BUỘC SẼ VIẾT HOÀN TOÀN BẰNG TIẾNG TRUNG GIẢN THỂ (简体中文).
+
+
 
 
 ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ
@@ -2624,9 +2631,13 @@ Hãy bắt tay vào viết chi tiết phần đầu tiên theo cấu trúc mẫu
 
 
 
-⚠Đ BĐM SĐT MẪU YÊU CẦU:
+⚠️ BÁM SÁT MẪU YÊU CẦU:
 
 Phần này trong mẫu gốc được định nghĩa là: ${firstSection.suggestedContent || "Không có hướng dẫn phụ"}
+
+🌐 QUY ĐỊNH NGÔN NGỮ CHO PHẦN NÀY:
+Phần này là "THÔNG TIN CHUNG VỀ SÁNG KIẾN" nên BẮT BUỘC PHẢI ĐƯỢC VIẾT BẰNG TIẾNG VIỆT (Trình bày đầy đủ: 1. Tên sáng kiến; 2. Lĩnh vực áp dụng; 3. Tác giả, chức vụ, đơn vị công tác; 4. Đối tượng áp dụng; 5. Thời gian áp dụng...).
+Bắt đầu từ phần tiếp theo (Tóm tắt sáng kiến) mới bắt đầu viết bằng Tiếng Trung Giản Thể.
 
 
 
@@ -2779,6 +2790,12 @@ Tiếp tục viết chi tiết nội dung phần tiếp theo của SKKN: **${nex
 
 
 (Hướng dẫn từ mẫu gốc: ${nextSection.suggestedContent || "Không có hướng dẫn phụ"})
+
+🌐 QUY ĐỊNH NGÔN NGỮ BẮT BUỘC (BẮT ĐẦU TỪ TÓM TẮT SÁNG KIẾN TRỞ ĐI):
+Từ phần này trở đi (bao gồm Tóm tắt sáng kiến và tất cả các Chương I, II, III, IV, V, Tài liệu tham khảo, Phụ lục), TOÀN BỘ NỘI DUNG PHẢI ĐƯỢC VIẾT HOÀN TOÀN BẰNG TIẾNG TRUNG GIẢN THỂ (简体中文)!
+- Văn phong: Ngữ văn học thuật Hán ngữ chuẩn mực, câu văn lưu loát, thuật ngữ sư phạm Hán ngữ chính xác.
+- Nội dung: Toàn bộ các đề mục, nội dung phân tích, luận cứ lý luận, phân tích lỗi sai ngôn ngữ, giải pháp sư phạm, bài tập thực hành, bảng số liệu thực nghiệm và kết luận... ĐỀU PHẢI VIẾT BẰNG TIẾNG TRUNG GIẢN THỂ (简体字).
+- Tiêu đề mục: Dùng tiếng Trung giản thể kèm phụ đề tiếng Việt (Ví dụ: 中文摘要 (Tóm tắt sáng kiến), 第一章 引言 (Chương I: Mở đầu)...) để hội đồng dễ đối chiếu.
 
 
 

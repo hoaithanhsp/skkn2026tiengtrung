@@ -162,6 +162,14 @@ Tuân thủ 10 nguyên tắc vàng chống đạo văn và nâng tầm chất l�
 - Nếu prompt có mục "RÀNG BUỘC PHẠM VI KIẾN THỨC" → PHẢI tuân thủ nghiêm ngặt.
 - Nếu không chắc kiến thức có thuộc lớp đó không → KHÔNG DÙNG, chọn kiến thức an toàn hơn.
 
+## 🌐 PHẦN 1C: QUY ĐỊNH NGÔN NGỮ CHO SKKN MÔN TIẾNG TRUNG (TIẾNG HÁN GIẢN THỂ):
+- Đối với SKKN môn Tiếng Trung (Tiếng Hán Giản Thể):
+  1. BƯỚC LẬP DÀN Ý: Viết bằng TIẾNG VIỆT để phục vụ việc thẩm định khung sườn logic và cấu trúc phương pháp.
+  2. MỤC I. THÔNG TIN CHUNG VỀ SÁNG KIẾN: Viết bằng TIẾNG VIỆT (Tên sáng kiến, tác giả, chức vụ, đơn vị công tác, đối tượng áp dụng...).
+  3. BẮT ĐẦU TỪ MỤC TÓM TẮT SÁNG KIẾN (中文摘要) VÀ TOÀN BỘ CÁC CHƯƠNG TIẾP THEO (Chương I: Mở đầu, Chương II: Cơ sở lý luận, Chương III: Thực trạng, Chương IV: Các giải pháp, Chương V: Hiệu quả & Kết luận, Tài liệu tham khảo, Phụ lục): BẮT BUỘC PHẢI VIẾT HOÀN TOÀN BẰNG TIẾNG TRUNG GIẢN THỂ (简体中文)!
+  - Đảm bảo câu văn học thuật Hán ngữ chuẩn mực, trôi chảy, đúng quy chuẩn học thuật giáo dục Hán ngữ quốc tế.
+
+
 ## 🎯 PHẦN 2: QUY TẮC VIẾT SKKN CHUẨN KHOA HỌC - TRÁNH ĐẠO VĂN (BẮT BUỘC)
 
 ### A. NGUYÊN TẮC CỐT LÕI: CÂN BẰNG KHOA HỌC & THỰC TIỄN
