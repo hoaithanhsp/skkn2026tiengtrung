@@ -38,6 +38,35 @@ import { LockScreen } from './components/LockScreen';
 
 const MAX_REF_DOCS_FOR_PROMPT = 80000; // ~80K ký tự tối đa cho tài liệu tham khảo trong prompt
 
+const VIETNAMESE_MENU_LABELS: Record<string, string> = {
+  '1': 'THÔNG TIN CHUNG VỀ SÁNG KIẾN KINH NGHIỆM',
+  '2': 'TÓM TẮT SÁNG KIẾN',
+  '3': 'CHƯƠNG I: MỞ ĐẦU',
+  '3.1': '1. Lý do chọn đề tài',
+  '3.2': '2. Mục đích và nhiệm vụ nghiên cứu',
+  '3.3': '3. Đối tượng và phạm vi nghiên cứu',
+  '3.4': '4. Phương pháp nghiên cứu',
+  '3.5': '5. Điểm mới và đóng góp khoa học',
+  '4': 'CHƯƠNG II: CƠ SỞ LÝ LUẬN',
+  '4.1': '1. Cơ sở lý thuyết',
+  '4.2': '2. Cơ sở pháp lý và yêu cầu chương trình',
+  '5': 'CHƯƠNG III: THỰC TRẠNG VẤN ĐỀ',
+  '6': 'CHƯƠNG IV: CÁC GIẢI PHÁP',
+  '6.1': '1. Phân tích nguyên nhân lỗi',
+  '6.2': '2. Giải pháp 1',
+  '6.3': '3. Giải pháp 2',
+  '6.4': '4. Giải pháp 3',
+  '6.5': '5. Giải pháp 4',
+  '6.6': '6. Giải pháp 5',
+  '7': 'CHƯƠNG V: HIỆU QUẢ VÀ KẾT LUẬN',
+  '7.1': '1. Kết quả thực nghiệm',
+  '7.2': '2. Đánh giá định tính',
+  '7.3': '3. Bài học kinh nghiệm và khả năng nhân rộng',
+  '7.4': '4. Kết luận và khuyến nghị',
+  '8': 'TÀI LIỆU THAM KHẢO',
+  '9': 'PHỤ LỤC SÁNG KIẾN KINH NGHIỆM',
+};
+
 
 
 const truncateForPrompt = (text: string, maxChars: number = MAX_REF_DOCS_FOR_PROMPT): string => {
@@ -565,9 +594,9 @@ const App: React.FC = () => {
 
       info[2 + idx] = {
 
-        label: section.title.length > 25 ? section.title.substring(0, 25) + '...' : section.title,
+        label: VIETNAMESE_MENU_LABELS[section.id] || (section.title.length > 25 ? section.title.substring(0, 25) + '...' : section.title),
 
-        description: `Viết mục: ${section.title}`
+        description: `Viết mục: ${VIETNAMESE_MENU_LABELS[section.id] || section.title}`
 
       };
 
