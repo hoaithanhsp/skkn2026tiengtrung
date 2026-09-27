@@ -18,8 +18,9 @@ import {
   LevelFormat,
   ShadingType,
   PageNumber,
-  Footer,
   Header,
+  PageOrientation,
+  LineRuleType,
 } from 'docx';
 
 interface ParsedElement {
@@ -279,7 +280,8 @@ function elementsToDocxChildren(elements: ParsedElement[], numberingConfig: any[
       case 'paragraph':
         children.push(new Paragraph({
           children: parseInlineFormatting(element.content),
-          spacing: { after: 120 },
+          indent: { firstLine: 720 },
+          spacing: { after: 120, line: 360, lineRule: LineRuleType.AUTO },
           alignment: AlignmentType.JUSTIFIED
         }));
         break;
@@ -526,6 +528,39 @@ function cleanMarkdownForExport(markdown: string): string {
 }
 
 /**
+ * Chỉ lấy phần nội dung SKKN bắt đầu từ mục Thông tin chung.
+ * Dàn ý được sinh trước mục này không phải là nội dung để xuất Word.
+ */
+export function extractSkknContentFromGeneralInfo(rawMarkdown: string): string | null {
+  if (!rawMarkdown?.trim()) return null;
+
+  const heading = 'THÔNG TIN CHUNG VỀ SÁNG KIẾN KINH NGHIỆM';
+  const lines = rawMarkdown.replace(/\r\n?/g, '\n').split('\n');
+  const headingIndexes = lines.reduce<number[]>((indexes, line, index) => {
+    const normalized = line
+      .replace(/^\s*(?:[#>*-]+\s*)?/, '')
+      .replace(/[📌📝🔹🔸✅]/gu, '')
+      .replace(/[*_\x60]/g, '')
+      .replace(/^\s*\d+[.)-]\s*/, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toUpperCase();
+
+    if (normalized.startsWith(heading)) indexes.push(index);
+    return indexes;
+  }, []);
+
+  // Dàn ý thường có cùng tiêu đề ở phía trước; phần nội dung thật là lần xuất hiện cuối.
+  const headingIndex = headingIndexes.at(-1) ?? -1;
+
+  if (headingIndex < 0) return null;
+
+  const content = lines.slice(headingIndex);
+  content[0] = '# ' + heading;
+  return content.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
  * Xuất Markdown sang file .docx
  */
 export async function exportMarkdownToDocx(
@@ -548,9 +583,9 @@ export async function exportMarkdownToDocx(
     styles: {
       default: {
         document: {
-          run: { font: 'Times New Roman', size: 26 }, // 13pt chuẩn SKKN VN
+          run: { font: 'Times New Roman', size: 26, color: '000000' }, // 13pt chuẩn SKKN VN
           paragraph: {
-            spacing: { line: 360 } // Line spacing 1.5
+            spacing: { line: 360, lineRule: LineRuleType.AUTO } // Line spacing 1.5
           }
         }
       },
@@ -589,22 +624,29 @@ export async function exportMarkdownToDocx(
     },
     sections: [{
       properties: {
+        titlePage: true,
         page: {
+          size: {
+            width: 11906,
+            height: 16838,
+            orientation: PageOrientation.PORTRAIT,
+          },
           margin: {
             top: 1134,   // 2cm (1134 twips)
-            right: 1134, // 2cm
+            right: 850,  // 1.5cm
             bottom: 1134, // 2cm
             left: 1701   // 3cm (1701 twips) - chuẩn SKKN VN
-          }
+          },
         }
       },
-      footers: {
-        default: new Footer({
+      headers: {
+        first: new Header({ children: [] }),
+        default: new Header({
           children: [
             new Paragraph({
               alignment: AlignmentType.CENTER,
               children: [
-                new TextRun({ children: [PageNumber.CURRENT], font: 'Times New Roman', size: 22 })
+                new TextRun({ children: [PageNumber.CURRENT], font: 'Times New Roman', size: 26, color: '000000' })
               ]
             })
           ]

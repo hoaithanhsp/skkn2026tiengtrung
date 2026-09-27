@@ -3564,25 +3564,22 @@ ${CONCLUSION_GUIDE}
 
     try {
 
-      const { exportMarkdownToDocx } = await import('./services/docxExporter');
+      if (state.step === GenerationStep.OUTLINE) {
+        alert('Chưa có nội dung THÔNG TIN CHUNG VỀ SÁNG KIẾN KINH NGHIỆM để xuất Word. Vui lòng viết phần đầu trước.');
+        return;
+      }
+
+      const { exportMarkdownToDocx, extractSkknContentFromGeneralInfo } = await import('./services/docxExporter');
+
+      const exportableContent = extractSkknContentFromGeneralInfo(state.fullDocument);
+      if (!exportableContent) {
+        alert('Chưa có nội dung THÔNG TIN CHUNG VỀ SÁNG KIẾN KINH NGHIỆM để xuất Word. Vui lòng bấm Bắt đầu lập dàn ý và viết phần đầu trước.');
+        return;
+      }
 
       const filename = `SKKN_${userInfo.topic.substring(0, 30).replace(/[^a-zA-Z0-9\u00C0-\u1EF9]/g, '_')}.docx`;
 
-      // TruyĐn headerFields để tạo phần đầu SKKN trong Word
-
-      const templateHeaderFields = customTemplateData?.headerFields || {};
-
-      await exportMarkdownToDocx(state.fullDocument, filename, templateHeaderFields, {
-
-        topic: userInfo.topic,
-
-        school: userInfo.school,
-
-        location: userInfo.location,
-
-        subject: userInfo.subject,
-
-      });
+      await exportMarkdownToDocx(exportableContent, filename);
 
     } catch (error: any) {
 
