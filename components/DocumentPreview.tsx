@@ -157,33 +157,11 @@ function formatContent(text: string): string {
 
 /** Hiển thị khi đang chờ AI với đếm thời gian & gợi ý */
 const WaitingIndicator: React.FC = () => {
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => setElapsed(prev => prev + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const formatTime = (s: number) => {
-    const mins = Math.floor(s / 60);
-    const secs = s % 60;
-    return mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}s`;
-  };
-
   return (
-    <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4">
-      <div className="w-16 h-16 border-4 border-gray-200 border-t-sky-500 rounded-full animate-spin"></div>
-      <p>Đang chờ nội dung từ chuyên gia AI...</p>
-      <p className="text-xs text-gray-300">Đã chờ: {formatTime(elapsed)}</p>
-      {elapsed >= 15 && elapsed < 30 && (
-        <p className="text-xs text-amber-400 animate-pulse">⏳ AI đang suy nghĩ, vui lòng kiên nhẫn...</p>
-      )}
-      {elapsed >= 30 && elapsed < 45 && (
-        <p className="text-xs text-orange-400 animate-pulse">🔄 Đang xử lý yêu cầu phức tạp. Nếu quá lâu, hãy bấm "Hủy yêu cầu" ở bên trái.</p>
-      )}
-      {elapsed >= 45 && (
-        <p className="text-xs text-red-400 animate-pulse">⚠️ Phản hồi chậm bất thường. Hãy bấm "Hủy yêu cầu" rồi thử lại.</p>
-      )}
+    <div className="h-full min-h-[360px] flex flex-col items-center justify-center text-gray-400 gap-4" role="status" aria-live="polite">
+      <div className="w-14 h-14 rounded-full border-4 border-sky-100 border-t-sky-500"></div>
+      <p className="font-medium text-gray-500">Đang chờ nội dung từ chuyên gia AI...</p>
+      <p className="min-h-5 text-xs text-gray-400">AI đang xử lý yêu cầu. Bạn có thể chờ hoặc bấm “Hủy yêu cầu” nếu cần.</p>
     </div>
   );
 };
