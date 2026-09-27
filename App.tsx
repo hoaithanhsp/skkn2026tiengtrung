@@ -545,7 +545,7 @@ const App: React.FC = () => {
 
       0: { label: "Thông tin", description: "Thiết lập thông tin cơ bản" },
 
-      1: { label: "Lập Dàn Đ", description: "Xây dựng khung sưĐn cho SKKN" },
+      1: { label: "Lập Dàn Ý", description: "Xây dựng khung sườn cho SKKN" },
 
     };
 
@@ -1313,7 +1313,7 @@ Phải sử dụng thuật ngữ phù hợp: "sinh viên" thay "hĐc sinh", "gi�
 
 NHIỆM VỤ CỦA BẠN:
 
-Lập DÀN Đ CHI TIẾT cho một đĐ tài SKKN dựa trên thông tin tôi cung cấp.Dàn ý phải đầy đủ, cụ thể, có độ sâu và đảm bảo 4 tiêu chí: Tính MỚI, Tính KHOA HỌC, Tính KHẢ THI, Tính HIỆU QUẢ.
+Lập DÀN Ý CHI TIẾT cho một đề tài SKKN dựa trên thông tin tôi cung cấp. Dàn ý phải đầy đủ, cụ thể, có độ sâu và đảm bảo 4 tiêu chí: Tính MỚI, Tính KHOA HỌC, Tính KHẢ THI, Tính HIỆU QUẢ.
 
 
 
@@ -1413,11 +1413,11 @@ Lập DÀN Đ CHI TIẾT cho một đĐ tài SKKN dựa trên thông tin tôi cu
 
 - Dùng ngôn ngữ TỰ NHIÊN, CHÂN THÀNH, không máy móc hay khuôn mẫu.
 
-- Xen kẽ những suy nghĩ cá nhân, những quan sát thực tế từ lớp hĐc.
+- Xen kẽ những suy nghĩ cá nhân, những quan sát thực tế từ lớp học.
 
 
 
-BẮT ĐẦU phản hồi bằng MENU NAVIGATION trạng thái Bước 2(Lập Dàn Đ - Đang thực hiện).
+BẮT ĐẦU phản hồi bằng MENU NAVIGATION trạng thái Bước 2(Lập Dàn Ý - Đang thực hiện).
 
 
 
@@ -2354,7 +2354,7 @@ ${getPageLimitPrompt()}
 
 
 
-📋 LƯU Đ KHI LẬP DÀN Đ VỚI GIỚI HẠN TRANG:
+📋 LƯU Ý KHI LẬP DÀN Ý VỚI GIỚI HẠN TRANG:
 
 - Dàn ý phải TƯƠNG XỨNG với số trang cho phép
 
@@ -2362,7 +2362,7 @@ ${getPageLimitPrompt()}
 
 - Nếu trung bình (25-40): Số mục con vừa phải, mỗi giải pháp 5-6 ý chính
 
-- Nếu nhiĐu trang (>40): Có thể mở rộng, mỗi giải pháp 6-8 ý chính
+- Nếu nhiều trang (>40): Có thể mở rộng, mỗi giải pháp 6-8 ý chính
 
 - Đảm bảo dàn ý phản ánh đúng quy mô nội dung sẽ viết
 
@@ -2502,11 +2502,11 @@ QUAN TRỌNG:
 
       const feedbackMessage = `
 
-      BẮT ĐẦU phản hồi bằng MENU NAVIGATION trạng thái Bước 2(Lập Dàn Đ - Đang thực hiện).
+      BẮT ĐẦU phản hồi bằng MENU NAVIGATION trạng thái Bước 2(Lập Dàn Ý - Đang thực hiện).
 
 
 
-      Dựa trên dàn ý đã lập, ngưĐi dùng có yêu cầu chỉnh sửa sau:
+      Dựa trên dàn ý đã lập, người dùng có yêu cầu chỉnh sửa sau:
 
 "${outlineFeedback}"
 
