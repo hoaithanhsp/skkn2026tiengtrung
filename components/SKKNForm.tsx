@@ -7,9 +7,10 @@ import { HIGHER_ED_LEVELS, HIGHER_ED_GRADES } from '../constants';
 import { SUBJECTS_DATA, SUBJECT_GROUPS, searchSubjects, getSubjectsByGroup } from '../data/subjectsData';
 import { analyzeDocumentForSKKN, extractSKKNStructure, analyzeTitleSKKN } from '../services/geminiService';
 import TitleAnalysisPanel from './TitleAnalysisPanel';
-import { BookOpen, School, GraduationCap, PenTool, MapPin, Calendar, Users, Cpu, Target, Monitor, FileUp, Sparkles, ClipboardPaste, Loader2, FileText, Search, X, CheckCircle, List, Save, ChevronDown } from 'lucide-react';
+import { BookOpen, School, GraduationCap, PenTool, MapPin, Calendar, Users, Cpu, Target, Monitor, FileUp, Sparkles, ClipboardPaste, Loader2, FileText, Search, X, CheckCircle, List, Save, ChevronDown, Check, Download, Layers } from 'lucide-react';
 import * as mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
+import { OFFICIAL_TIENG_TRUNG_DOCS_BUNDLE, OFFICIAL_TIENG_TRUNG_DOCUMENTS_META, SUGGESTED_SKKN_TOPICS_FROM_DOCS } from '../data/officialTiengTrungDocuments';
 
 // Define worker source for PDF.js
 // Using a CDN to avoid complex build configuration for web workers in standard Vite setups
@@ -67,6 +68,7 @@ export const SKKNForm: React.FC<Props> = ({ userInfo, onChange, onSubmit, onManu
   const [isAnalyzingRef, setIsAnalyzingRef] = useState(false);
   const [refAnalysisResult, setRefAnalysisResult] = useState('');
   const [showAnalysisModal, setShowAnalysisModal] = useState<'ref' | null>(null);
+  const [showOfficialDocsModal, setShowOfficialDocsModal] = useState(false);
 
   // State cho phân tích tên đề tài
   const [isAnalyzingTitle, setIsAnalyzingTitle] = useState(false);
@@ -323,6 +325,35 @@ export const SKKNForm: React.FC<Props> = ({ userInfo, onChange, onSubmit, onManu
     try {
       sessionStorage.removeItem('skkn_ref_docs');
       sessionStorage.removeItem('skkn_ref_file_names');
+    } catch (e) { /* ignore */ }
+  };
+
+  // Nạp gói tài liệu tham khảo chính thức chuẩn Bộ GD&ĐT (Thông tư 19/2021 & MALL 2008)
+  const handleLoadOfficialTiengTrungDocs = () => {
+    const existing = userInfo.referenceDocuments || '';
+    const newContent = existing.includes('THÔNG TƯ 19/2021/TT-BGDĐT')
+      ? existing
+      : (existing ? `${existing}\n\n${OFFICIAL_TIENG_TRUNG_DOCS_BUNDLE}` : OFFICIAL_TIENG_TRUNG_DOCS_BUNDLE);
+
+    onChange('referenceDocuments', newContent);
+
+    const officialNames = [
+      '01_Thong_tu_19_2021_TT_BGDĐT.pdf (Chuẩn Bộ)',
+      '02_03_CTGDPT_Tieng_Trung_Quoc_THPT.pdf (CT Bậc 3)',
+      '04_MALL_Kukulska_Hulme_Shield_2008.pdf (Nghiên cứu)'
+    ];
+
+    setRefFileNames(prev => {
+      const merged = [...prev];
+      officialNames.forEach(n => {
+        if (!merged.includes(n)) merged.push(n);
+      });
+      return merged;
+    });
+
+    try {
+      sessionStorage.setItem('skkn_ref_docs', newContent);
+      sessionStorage.setItem('skkn_ref_file_names', JSON.stringify(officialNames));
     } catch (e) { /* ignore */ }
   };
 
@@ -714,6 +745,42 @@ export const SKKNForm: React.FC<Props> = ({ userInfo, onChange, onSubmit, onManu
               </div>
             )}
 
+            {/* Banner Gói Tài Liệu Tham Khảo Chuẩn Bộ GD&ĐT & MALL 2008 */}
+            <div className="mb-4 p-3.5 bg-gradient-to-r from-red-50 via-orange-50 to-amber-50 border border-orange-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-600 to-orange-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 shadow-sm">
+                  🇨🇳
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded-full border border-red-200">
+                      TÀI LIỆU CHUẨN BỘ GD&ĐT
+                    </span>
+                    <span className="text-xs text-orange-700 font-medium">Thông tư 19/2021 & MALL 2008</span>
+                  </div>
+                  <p className="text-xs font-bold text-gray-800 mt-0.5">Gói tài liệu CTGDPT môn Tiếng Trung Quốc THPT</p>
+                  <p className="text-[11px] text-gray-500">Chuẩn Bậc 3 THPT (HSK 3-4) • Nghiên cứu MALL ứng dụng di động / AI</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowOfficialDocsModal(true)}
+                  className="flex-1 sm:flex-initial px-2.5 py-1.5 text-xs font-semibold text-orange-700 bg-white border border-orange-200 hover:bg-orange-50 rounded-lg transition-colors flex items-center justify-center gap-1 shadow-xs"
+                >
+                  <Layers size={13} /> Xem chi tiết
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLoadOfficialTiengTrungDocs}
+                  className="flex-1 sm:flex-initial px-3 py-1.5 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5"
+                >
+                  <BookOpen size={13} />
+                  {userInfo.referenceDocuments?.includes('THÔNG TƯ 19/2021/TT-BGDĐT') ? 'Đã nạp vào data' : 'Nạp tài liệu này'}
+                </button>
+              </div>
+            </div>
+
             <div className="flex justify-between items-start mb-3">
               <label className="text-sm font-semibold text-gray-700">
                 Tải lên tài liệu PDF/Word để AI tham khảo:
@@ -1067,6 +1134,106 @@ export const SKKNForm: React.FC<Props> = ({ userInfo, onChange, onSubmit, onManu
                 className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Chi Tiết Gói Tài Liệu Tham Khảo Chuẩn Bộ GD&ĐT */}
+      {showOfficialDocsModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[88vh] overflow-hidden shadow-2xl flex flex-col">
+            <div className="p-4 bg-gradient-to-r from-red-600 via-orange-600 to-amber-600 text-white flex justify-between items-center">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">🇨🇳</span>
+                <div>
+                  <h3 className="font-bold text-base">Gói Tài Liệu Tham Khảo Môn Tiếng Trung THPT</h3>
+                  <p className="text-xs text-orange-100">Thông tư 19/2021/TT-BGDĐT • CTGDPT Tiếng Trung Quốc • Nghiên cứu MALL 2008</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowOfficialDocsModal(false)}
+                className="p-1 hover:bg-white/20 rounded-lg transition-colors text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-5">
+              {/* Danh sách 4 tài liệu trong gói */}
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-2.5 flex items-center gap-1.5">
+                  <FileText size={14} className="text-red-600" />
+                  Danh mục tài liệu trong gói ({OFFICIAL_TIENG_TRUNG_DOCUMENTS_META.length} tài liệu chính thức):
+                </h4>
+                <div className="space-y-2.5">
+                  {OFFICIAL_TIENG_TRUNG_DOCUMENTS_META.map((doc, idx) => (
+                    <div key={idx} className="p-3 bg-gray-50 border border-gray-200 rounded-xl hover:bg-orange-50/40 transition-colors">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200 mb-1">
+                            {doc.group}
+                          </span>
+                          <p className="text-xs font-bold text-gray-900">{doc.title}</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5">{doc.fileName} • {(doc.fileSizeBytes / 1024 / 1024).toFixed(2)} MB</p>
+                          <p className="text-xs text-gray-700 mt-1.5 leading-relaxed bg-white p-2 rounded-lg border border-gray-100">
+                            <strong>Ý nghĩa với SKKN:</strong> {doc.significanceForSKKN}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 4 Chủ đề gợi ý từ tài liệu */}
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-2.5 flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-amber-600" />
+                  4 Chủ đề gợi ý triển khai phù hợp cấp THPT từ tài liệu:
+                </h4>
+                <div className="space-y-2">
+                  {SUGGESTED_SKKN_TOPICS_FROM_DOCS.map((top, idx) => (
+                    <div key={top.id} className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold text-gray-900">{idx + 1}. {top.title}</p>
+                        <p className="text-[11px] text-amber-800 mt-0.5">
+                          <strong>Trọng tâm:</strong> {top.focus} • <strong>Đối tượng:</strong> {top.targetGrade}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onChange('topic', top.title);
+                          setShowOfficialDocsModal(false);
+                        }}
+                        className="px-2.5 py-1.5 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-lg text-xs font-semibold flex-shrink-0 transition-colors"
+                      >
+                        Chọn đề tài này
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+              <button
+                onClick={() => setShowOfficialDocsModal(false)}
+                className="px-4 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-xl hover:bg-gray-100 transition-colors"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={() => {
+                  handleLoadOfficialTiengTrungDocs();
+                  setShowOfficialDocsModal(false);
+                }}
+                className="px-5 py-2 text-xs font-bold text-white bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 rounded-xl shadow-md transition-all flex items-center gap-1.5"
+              >
+                <BookOpen size={14} />
+                Nạp toàn bộ gói tài liệu vào Sáng kiến
               </button>
             </div>
           </div>

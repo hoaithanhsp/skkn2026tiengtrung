@@ -1,0 +1,54 @@
+{
+  "createdAt": "2026-09-27",
+  "subject": "Tiếng Trung Quốc (chữ Hán giản thể)",
+  "educationLevel": "THPT",
+  "language": "vi",
+  "licenseNote": "Tài liệu trong gói giữ nguyên quyền và điều kiện sử dụng của từng nguồn.",
+  "documents": [
+    {
+      "file": "01_Thong_tu_19_2021_TT_BGDĐT_phan_van_ban.pdf",
+      "title": "Thông tư số 19/2021/TT-BGDĐT - phần văn bản ban hành chương trình",
+      "group": "Cơ sở pháp lý Việt Nam",
+      "source": "https://congbaocdn.chinhphu.vn/CongBaoCP/VanBan/2021/7/34061/36367-1-2021689-69019-2021-tt-bgddt.pdf",
+      "bytes": 1179809
+    },
+    {
+      "file": "02_CTGDPT_Tieng_Trung_Quoc_phan_1.pdf",
+      "title": "Chương trình GDPT môn Ngoại ngữ 1 - phần có mở đầu Chương trình môn Tiếng Trung Quốc",
+      "group": "Cơ sở chương trình Việt Nam",
+      "source": "https://congbaocdn.chinhphu.vn/CongBaoCP/VanBan/2021/7/34061/36373-1-2021693-69419-2021-tt-bgddt.pdf",
+      "bytes": 1032959
+    },
+    {
+      "file": "03_CTGDPT_Tieng_Trung_Quoc_phan_2.pdf",
+      "title": "Chương trình GDPT môn Tiếng Trung Quốc - phần tiếp theo",
+      "group": "Cơ sở chương trình Việt Nam",
+      "source": "https://congbaocdn.chinhphu.vn/CongBaoCP/VanBan/2021/7/34061/36376-1-2021695-69619-2021-tt-bgddt.pdf",
+      "bytes": 652183
+    },
+    {
+      "file": "04_Mobile_Assisted_Language_Learning_Kukulska_Hulme_Shield_2008.pdf",
+      "title": "An overview of mobile assisted language learning: From content delivery to supported collaboration and interaction",
+      "group": "Nghiên cứu truy cập mở",
+      "source": "https://scholarspace.manoa.hawaii.edu/server/api/core/bitstreams/a5ff6d56-3f22-4d99-812b-fa964430fd4f/content",
+      "bytes": 239063
+    }
+  ],
+  "programPdfTextExtraction": {
+    "file": "05_Trich_noi_dung_CTGDPT_Tieng_Trung_Quoc.txt",
+    "sourcePdf": "02_CTGDPT_Tieng_Trung_Quoc_phan_1.pdf",
+    "matchedPdfPages": [
+      74,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      89
+    ],
+    "notice": "Bản trích để tra cứu, cần đối chiếu PDF gốc khi trích dẫn."
+  }
+}

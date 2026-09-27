@@ -14,6 +14,7 @@ import { curriculumValidator } from './services/curriculumValidator';
 
 import { OUTLINE_GUIDE, INTRO_GUIDE, THEORY_GUIDE, REALITY_GUIDE, RESULT_GUIDE, CONCLUSION_GUIDE, APPENDIX_GUIDE, NATURAL_WRITING_TECHNIQUES } from './data/skknKnowledgeBase';
 import { STANDARD_MOET_TIENG_TRUNG_TEMPLATE } from './data/standardMoetTiengTrungTemplate';
+import { OFFICIAL_TIENG_TRUNG_DOCS_BUNDLE } from './data/officialTiengTrungDocuments';
 
 import { SKKNForm } from './components/SKKNForm';
 
@@ -4392,6 +4393,7 @@ Tổ: [Tổ chuyên môn]
       level: prev.level || 'THPT',
       grade: prev.grade || 'Lớp 10, 11, 12',
       textbook: prev.textbook || 'Tiếng Trung Quốc 10, 11, 12 (GDPT 2018)',
+      referenceDocuments: prev.referenceDocuments || OFFICIAL_TIENG_TRUNG_DOCS_BUNDLE,
     }));
 
     setTemplateFileName(fileName);

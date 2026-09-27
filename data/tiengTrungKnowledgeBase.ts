@@ -303,3 +303,7 @@ export const EXPERIMENTAL_RESULTS_TABLE_SAMPLE = `
 | **Lớp ĐC (Sau TN)** | 42 | 7 em (16,7%) | 16 em (38,1%) | 16 em (38,1%) | 3 em (7,1%) | 6,55 (+0,37) |
 | **Lớp TN (Sau TN)** | 43 | **18 em (41,9%)** | **19 em (44,2%)** | **6 em (14,0%)** | **0 em (0%)** | **7,82 (+1,58)** |
 `;
+
+// Tích hợp gói tài liệu tham khảo chính thức chuẩn Bộ GD&ĐT & MALL 2008
+export * from './officialTiengTrungDocuments';
+

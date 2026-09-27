@@ -254,10 +254,10 @@ export const TemplateUploadStep: React.FC<Props> = ({
                                         <span className="text-[10px] font-extrabold uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded-full border border-red-200">
                                             MẪU CHUẨN BỘ GD&ĐT
                                         </span>
-                                        <span className="text-xs text-orange-700 font-bold">5 Chương • 25 Mục chuẩn</span>
+                                        <span className="text-xs text-orange-700 font-bold">5 Chương • {STANDARD_MOET_TIENG_TRUNG_TEMPLATE.sections.length} Mục chuẩn</span>
                                     </div>
                                     <p className="text-sm font-bold text-gray-800 mt-1">Mẫu SKKN Tiếng Trung Giản Thể THPT</p>
-                                    <p className="text-xs text-gray-500">Chuẩn cấu trúc SKKN Sở GD&ĐT • Khắc phục lỗi sai phó từ tiếng Hán</p>
+                                    <p className="text-xs text-gray-500">Chuẩn cấu trúc SKKN Bộ GD&ĐT • Khắc phục lỗi sai phó từ tiếng Hán</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2 w-full sm:w-auto flex-shrink-0">
@@ -470,7 +470,7 @@ export const TemplateUploadStep: React.FC<Props> = ({
                             <div className="flex justify-between items-center px-1 text-xs text-gray-500">
                                 <span className="flex items-center gap-1 text-orange-700 font-medium">
                                     <Sparkles size={12} className="text-orange-500" />
-                                    Tích hợp 5 Chương & 25 mục chi tiết từ SKKN.docx
+                                    Tích hợp 5 Chương & {STANDARD_MOET_TIENG_TRUNG_TEMPLATE.sections.length} mục chi tiết chuẩn Bộ GD&ĐT
                                 </span>
                                 <button
                                     type="button"
@@ -501,7 +501,7 @@ export const TemplateUploadStep: React.FC<Props> = ({
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-base">Cấu trúc Mẫu chuẩn Bộ GD&ĐT</h3>
-                                    <p className="text-orange-100 text-xs">SKKN Môn Tiếng Trung Giản Thể THPT (5 Chương • 25 Mục)</p>
+                                    <p className="text-orange-100 text-xs">SKKN Môn Tiếng Trung Giản Thể THPT ({STANDARD_MOET_TIENG_TRUNG_TEMPLATE.sections.length} Mục chuẩn)</p>
                                 </div>
                             </div>
                             <button
