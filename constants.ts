@@ -15,6 +15,7 @@ export const FALLBACK_MODELS: string[] = [
    'gemini-3.5-flash',
    'gemini-3.5-flash-lite',
    'gemini-3.1-flash-lite',
+   'gemini-2.5-flash',
 ];
 
 // Agent Platform API — model list & fallback (api.md §III)
@@ -51,6 +52,11 @@ export const MODEL_INFO: Record<string, { name: string; description: string; isD
    'gemini-3.1-flash-lite': {
       name: 'Gemini 3.1 Flash Lite',
       description: 'Tương thích ngược — dự kiến ngừng sớm nhất 07/05/2027',
+      provider: 'gemini'
+   },
+   'gemini-2.5-flash': {
+      name: 'Gemini 2.5 Flash',
+      description: 'Dự phòng ổn định cao, tốc độ xử lý nhanh',
       provider: 'gemini'
    },
    // ---- Agent Platform API models ----
@@ -113,6 +119,11 @@ export const MODEL_CONFIG: Record<string, ModelConfig> = {
       thinkingLevel: 'HIGH',
    },
    // ---- Gemini 2.x — có thể gửi temperature ----
+   'gemini-2.5-flash': {
+      maxOutputTokens: 65536,
+      thinkingBudget: 2048,
+      temperature: 0.5,
+   },
    'gemini-2.5-flash-lite': {
       maxOutputTokens: 8192,
       temperature: 0.5,

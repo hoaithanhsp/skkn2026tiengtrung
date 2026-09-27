@@ -389,7 +389,7 @@ export const SKKNForm: React.FC<Props> = ({ userInfo, onChange, onSubmit, onManu
       return;
     }
     if (!apiKey) {
-      alert('Vui lòng cấu hình API Key trước.');
+      alert('Vui lòng cấu hình API Key trong mục Cài đặt trước.');
       return;
     }
     setIsAnalyzingTitle(true);
@@ -403,7 +403,12 @@ export const SKKNForm: React.FC<Props> = ({ userInfo, onChange, onSubmit, onManu
       );
       setTitleAnalysis(result);
     } catch (error: any) {
-      alert('Lỗi phân tích đề tài: ' + error.message);
+      const msg = error?.message || '';
+      if (msg.includes('quá tải') || msg.includes('overloaded')) {
+        alert('⚡ Tất cả các model AI hiện đang quá tải lượt yêu cầu từ máy chủ. Vui lòng đợi 15-30 giây rồi bấm "Phân tích" lại, hoặc chọn model khác trong Cài đặt.');
+      } else {
+        alert('Lỗi phân tích đề tài: ' + msg);
+      }
     } finally {
       setIsAnalyzingTitle(false);
     }

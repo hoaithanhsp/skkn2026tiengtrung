@@ -548,9 +548,11 @@ export const analyzeDocumentForSKKN = async (
   apiKey: string,
   documentContent: string,
   documentType: 'reference' | 'template',
-  selectedModel?: string
+  selectedModel?: string,
+  provider?: AiProvider
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey });
+  const actualProvider: AiProvider = provider || (localStorage.getItem('google_ai_provider') as AiProvider) || 'gemini';
+  const ai = createGoogleAiClient(apiKey, actualProvider);
 
   // Giới hạn nội dung để tránh vượt token limit
   const truncatedContent = documentContent.substring(0, 20000);
@@ -614,19 +616,36 @@ Hãy phân tích và trả về kết quả theo format sau:
 
 ⚠️ Lưu ý: Trả lời ngắn gọn, súc tích, tập trung vào thông tin cần thiết nhất.`;
 
-  const model = selectedModel || FALLBACK_MODELS[0];
+  const fallbackList = actualProvider === 'agent-platform'
+    ? [...AGENT_PLATFORM_FALLBACK_MODELS]
+    : [...FALLBACK_MODELS];
 
-  try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt
-    });
+  const modelsToTry = selectedModel
+    ? [selectedModel, ...fallbackList.filter(m => m !== selectedModel)]
+    : [...fallbackList];
 
-    return response.text || 'Không thể phân tích tài liệu. Vui lòng thử lại.';
-  } catch (error: any) {
-    console.error('Lỗi phân tích tài liệu:', error);
-    throw new Error(getFriendlyErrorMessage(error).message);
+  let lastError: any = null;
+
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const model = modelsToTry[i];
+    try {
+      const response = await ai.models.generateContent({
+        model: model,
+        contents: prompt
+      });
+
+      return response.text || 'Không thể phân tích tài liệu. Vui lòng thử lại.';
+    } catch (error: any) {
+      lastError = error;
+      const errorType = parseApiError(error);
+      if (errorType === 'INVALID_API_KEY') break;
+      if (errorType === 'PERMISSION_DENIED' && actualProvider !== 'agent-platform') break;
+      if (i < modelsToTry.length - 1) continue;
+    }
   }
+
+  console.error('Lỗi phân tích tài liệu:', lastError);
+  throw new Error(getFriendlyErrorMessage(lastError).message);
 };
 
 // Interface cho cấu trúc mục SKKN (import từ types.ts nếu cần)
@@ -641,9 +660,11 @@ interface SKKNSection {
 export const extractSKKNStructure = async (
   apiKey: string,
   templateContent: string,
-  selectedModel?: string
+  selectedModel?: string,
+  provider?: AiProvider
 ): Promise<{ sections: SKKNSection[], contentGuidelines?: string, pageLimitFromTemplate?: number, headerFields?: Record<string, string> }> => {
-  const ai = new GoogleGenAI({ apiKey });
+  const actualProvider: AiProvider = provider || (localStorage.getItem('google_ai_provider') as AiProvider) || 'gemini';
+  const ai = createGoogleAiClient(apiKey, actualProvider);
 
   // Giới hạn nội dung để tránh vượt token limit
   const truncatedContent = templateContent.substring(0, 25000);
@@ -705,61 +726,78 @@ CHỈ TRẢ VỀ JSON OBJECT, KHÔNG giải thích, KHÔNG markdown code block.
 
 BẮT ĐẦU JSON NGAY:`;
 
-  const model = selectedModel || FALLBACK_MODELS[0];
+  const fallbackList = actualProvider === 'agent-platform'
+    ? [...AGENT_PLATFORM_FALLBACK_MODELS]
+    : [...FALLBACK_MODELS];
 
-  try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt
-    });
+  const modelsToTry = selectedModel
+    ? [selectedModel, ...fallbackList.filter(m => m !== selectedModel)]
+    : [...fallbackList];
 
-    const responseText = response.text || '{}';
+  let lastError: any = null;
 
-    // Cố gắng parse JSON từ response
-    let jsonText = responseText.trim();
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const model = modelsToTry[i];
+    try {
+      const response = await ai.models.generateContent({
+        model: model,
+        contents: prompt
+      });
 
-    // Remove markdown code blocks if present
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      const responseText = response.text || '{}';
+
+      // Cố gắng parse JSON từ response
+      let jsonText = responseText.trim();
+
+      // Remove markdown code blocks if present
+      if (jsonText.startsWith('```json')) {
+        jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+
+      // Try to find JSON object first
+      const jsonObjMatch = jsonText.match(/\{[\s\S]*\}/);
+      if (jsonObjMatch) {
+        jsonText = jsonObjMatch[0];
+      }
+
+      const parsed = JSON.parse(jsonText);
+
+      // Nếu AI trả về object có sections
+      if (parsed && parsed.sections && Array.isArray(parsed.sections)) {
+        const sections: SKKNSection[] = parsed.sections.filter(
+          (s: any) => s.id && s.title && typeof s.level === 'number'
+        );
+        return {
+          sections,
+          contentGuidelines: parsed.contentGuidelines || '',
+          pageLimitFromTemplate: typeof parsed.pageLimitFromTemplate === 'number' ? parsed.pageLimitFromTemplate : 0,
+          headerFields: parsed.headerFields || {},
+        };
+      }
+
+      // Fallback: Nếu AI vẫn trả về array cũ
+      if (Array.isArray(parsed)) {
+        const sections: SKKNSection[] = parsed.filter(
+          (s: any) => s.id && s.title && typeof s.level === 'number'
+        );
+        return { sections };
+      }
+
+      return { sections: [] };
+
+    } catch (error: any) {
+      lastError = error;
+      const errorType = parseApiError(error);
+      if (errorType === 'INVALID_API_KEY') break;
+      if (errorType === 'PERMISSION_DENIED' && actualProvider !== 'agent-platform') break;
+      if (i < modelsToTry.length - 1) continue;
     }
-
-    // Try to find JSON object first
-    const jsonObjMatch = jsonText.match(/\{[\s\S]*\}/);
-    if (jsonObjMatch) {
-      jsonText = jsonObjMatch[0];
-    }
-
-    const parsed = JSON.parse(jsonText);
-
-    // Nếu AI trả về object có sections
-    if (parsed && parsed.sections && Array.isArray(parsed.sections)) {
-      const sections: SKKNSection[] = parsed.sections.filter(
-        (s: any) => s.id && s.title && typeof s.level === 'number'
-      );
-      return {
-        sections,
-        contentGuidelines: parsed.contentGuidelines || '',
-        pageLimitFromTemplate: typeof parsed.pageLimitFromTemplate === 'number' ? parsed.pageLimitFromTemplate : 0,
-        headerFields: parsed.headerFields || {},
-      };
-    }
-
-    // Fallback: Nếu AI vẫn trả về array cũ
-    if (Array.isArray(parsed)) {
-      const sections: SKKNSection[] = parsed.filter(
-        (s: any) => s.id && s.title && typeof s.level === 'number'
-      );
-      return { sections };
-    }
-
-    return { sections: [] };
-
-  } catch (error: any) {
-    console.error('Lỗi trích xuất cấu trúc SKKN:', error);
-    return { sections: [] };
   }
+
+  console.error('Lỗi trích xuất cấu trúc SKKN:', lastError);
+  return { sections: [] };
 };
 
 /**
@@ -771,9 +809,11 @@ export const analyzeTitleSKKN = async (
   title: string,
   subject?: string,
   level?: string,
-  selectedModel?: string
+  selectedModel?: string,
+  provider?: AiProvider
 ): Promise<TitleAnalysisResult> => {
-  const ai = new GoogleGenAI({ apiKey });
+  const actualProvider: AiProvider = provider || (localStorage.getItem('google_ai_provider') as AiProvider) || 'gemini';
+  const ai = createGoogleAiClient(apiKey, actualProvider);
 
   const prompt = `Bạn là chuyên gia phân tích tên đề tài Sáng kiến kinh nghiệm (SKKN) với 20 năm kinh nghiệm.
 
@@ -898,37 +938,68 @@ TRẢ VỀ JSON (KHÔNG có markdown code block, CHỈ JSON thuần):
 
 BẮT ĐẦU JSON NGAY:`;
 
-  const model = selectedModel || FALLBACK_MODELS[0];
+  const fallbackList = actualProvider === 'agent-platform'
+    ? [...AGENT_PLATFORM_FALLBACK_MODELS]
+    : [...FALLBACK_MODELS];
 
-  try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt
-    });
+  const modelsToTry = selectedModel
+    ? [selectedModel, ...fallbackList.filter(m => m !== selectedModel)]
+    : [...fallbackList];
 
-    const responseText = response.text || '{}';
+  let lastError: any = null;
 
-    // Xử lý response để lấy JSON
-    let jsonText = responseText.trim();
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const model = modelsToTry[i];
+    try {
+      console.log(`🤖 [analyzeTitleSKKN] Đang phân tích bằng model [${i + 1}/${modelsToTry.length}]: ${model}`);
+      const response = await ai.models.generateContent({
+        model: model,
+        contents: prompt
+      });
 
-    // Remove markdown code blocks if present
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      const responseText = response.text || '{}';
+
+      // Xử lý response để lấy JSON
+      let jsonText = responseText.trim();
+
+      // Remove markdown code blocks if present
+      if (jsonText.startsWith('```json')) {
+        jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+
+      // Find JSON object in response
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[0];
+      }
+
+      const result: TitleAnalysisResult = JSON.parse(jsonText);
+      console.log(`✅ [analyzeTitleSKKN] Phân tích thành công bằng model: ${model}`);
+      return result;
+
+    } catch (error: any) {
+      lastError = error;
+      const errorType = parseApiError(error);
+      console.warn(`⚠️ [analyzeTitleSKKN] Model ${model} gặp lỗi (${errorType}):`, error?.message || error);
+
+      // Nếu lỗi auth dừng ngay
+      if (errorType === 'INVALID_API_KEY') {
+        break;
+      }
+      if (errorType === 'PERMISSION_DENIED' && actualProvider !== 'agent-platform') {
+        break;
+      }
+
+      // Nếu còn model dự phòng, tự động chuyển sang model tiếp theo
+      if (i < modelsToTry.length - 1) {
+        console.log(`🔄 [analyzeTitleSKKN] Tự động thử model dự phòng [${i + 2}/${modelsToTry.length}]: ${modelsToTry[i + 1]}`);
+        continue;
+      }
     }
-
-    // Find JSON object in response
-    const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      jsonText = jsonMatch[0];
-    }
-
-    const result: TitleAnalysisResult = JSON.parse(jsonText);
-    return result;
-
-  } catch (error: any) {
-    console.error('Lỗi phân tích đề tài:', error);
-    throw new Error(getFriendlyErrorMessage(error).message);
   }
+
+  console.error('Lỗi phân tích đề tài (đã thử tất cả model dự phòng):', lastError);
+  throw new Error(getFriendlyErrorMessage(lastError).message);
 };
