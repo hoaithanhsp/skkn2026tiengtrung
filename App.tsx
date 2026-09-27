@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 import { UserInfo, GenerationStep, GenerationState, SKKNTemplate, SolutionsState, WizardStep } from './types';
 
@@ -100,6 +100,8 @@ const SESSION_REF_NAMES_KEY = 'skkn_ref_file_names';
 // LocalStorage key cho lưu/khôi phục phiên làm việc
 
 const SESSION_SAVE_KEY = 'skkn_session_data';
+
+const AUTO_WRITE_NEXT_KEY = 'skkn_auto_write_next';
 
 
 
@@ -438,6 +440,11 @@ const App: React.FC = () => {
 
   const [outlineFeedback, setOutlineFeedback] = useState("");
 
+  const [autoWriteNext, setAutoWriteNext] = useState(() => localStorage.getItem(AUTO_WRITE_NEXT_KEY) === 'true');
+  const autoWriteNextRef = useRef(autoWriteNext);
+  const autoWriteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestGenerateNextSectionRef = useRef<() => Promise<void>>(async () => {});
+
 
 
   // Phụ lục riêng biệt
@@ -572,7 +579,22 @@ const App: React.FC = () => {
     );
   }, [customTemplateData?.name, userInfo.level, userInfo.subject]);
 
+  useEffect(() => {
+    autoWriteNextRef.current = autoWriteNext;
+    localStorage.setItem(AUTO_WRITE_NEXT_KEY, String(autoWriteNext));
 
+    if (!autoWriteNext && autoWriteTimerRef.current) {
+      clearTimeout(autoWriteTimerRef.current);
+      autoWriteTimerRef.current = null;
+    }
+
+    return () => {
+      if (autoWriteTimerRef.current) {
+        clearTimeout(autoWriteTimerRef.current);
+        autoWriteTimerRef.current = null;
+      }
+    };
+  }, [autoWriteNext]);
 
   const currentStepsInfo = useMemo(() => {
 
@@ -621,6 +643,27 @@ const App: React.FC = () => {
 
 
   const COMPLETED_STEP_ID = isCustomFlow ? 2 + validCustomSections.length + 1 : GenerationStep.COMPLETED;
+
+  const scheduleAutoWriteNext = useCallback((nextStep: number) => {
+    if (!autoWriteNextRef.current || nextStep >= COMPLETED_STEP_ID) return;
+
+    if (autoWriteTimerRef.current) {
+      clearTimeout(autoWriteTimerRef.current);
+    }
+
+    autoWriteTimerRef.current = setTimeout(() => {
+      autoWriteTimerRef.current = null;
+      if (autoWriteNextRef.current) {
+        latestGenerateNextSectionRef.current();
+      }
+    }, 800);
+  }, [COMPLETED_STEP_ID]);
+
+  useEffect(() => {
+    if (autoWriteNext && state.step === GenerationStep.OUTLINE && !state.isStreaming && state.fullDocument.trim()) {
+      scheduleAutoWriteNext(state.step + 1);
+    }
+  }, [autoWriteNext, scheduleAutoWriteNext, state.fullDocument, state.isStreaming, state.step]);
 
 
 
@@ -3469,6 +3512,7 @@ ${CONCLUSION_GUIDE}
       // Just set streaming to false, step was already set
 
       setState(prev => ({ ...prev, isStreaming: false }));
+      scheduleAutoWriteNext(nextStepEnum);
 
 
 
@@ -3510,6 +3554,8 @@ ${CONCLUSION_GUIDE}
 
   };
 
+
+  latestGenerateNextSectionRef.current = generateNextSection;
 
 
   // Export to Word
@@ -4256,6 +4302,19 @@ Tổ: [Tổ chuyên môn]
               )}
 
 
+
+              <label className="flex items-start gap-2.5 p-3 bg-sky-50 border border-sky-200 rounded-lg cursor-pointer hover:bg-sky-100 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={autoWriteNext}
+                  onChange={(event) => setAutoWriteNext(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-sky-600"
+                />
+                <span className="text-xs text-sky-800">
+                  <span className="block font-semibold">Tự động viết phần tiếp theo</span>
+                  <span className="block mt-0.5 text-sky-600">Tự chuyển sang mục kế tiếp sau khi viết xong.</span>
+                </span>
+              </label>
 
               {/* Controls */}
 
