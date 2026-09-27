@@ -35,7 +35,7 @@ const getModelsForProvider = (provider: AiProvider): string[] => {
 
 // Lấy model mặc định theo provider
 const getDefaultModel = (provider: AiProvider): string => {
-    if (provider === 'agent-platform') return AGENT_PLATFORM_MODELS[0] || 'gemini-2.5-flash-lite';
+    if (provider === 'agent-platform') return AGENT_PLATFORM_MODELS[0] || 'gemini-2.5-flash';
     return 'gemini-3.6-flash';
 };
 
@@ -55,20 +55,20 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onClos
     // Load từ localStorage khi modal mở
     useEffect(() => {
         if (isOpen) {
-            const storedProvider = (localStorage.getItem('google_ai_provider') || 'gemini') as AiProvider;
-            const savedProvider: AiProvider = storedProvider === 'agent-platform' ? 'gemini' : storedProvider;
-            if (storedProvider === 'agent-platform') {
-                const legacyKey = localStorage.getItem('agent_platform_api_key');
-                if (legacyKey && !localStorage.getItem('gemini_api_key')) {
-                    localStorage.setItem('gemini_api_key', legacyKey);
-                }
+            const storedProvider = localStorage.getItem('google_ai_provider');
+            const savedProvider: AiProvider = storedProvider === 'agent-platform' ? 'agent-platform' : 'gemini';
+
+            if (storedProvider === 'vertex') {
                 localStorage.setItem('google_ai_provider', 'gemini');
                 localStorage.setItem('google_ai_provider_selection_source', 'migration');
-                localStorage.setItem('selected_model', getDefaultModel('gemini'));
             }
-            setProvider(savedProvider);
 
-            setApiKey(localStorage.getItem('gemini_api_key') || '');
+            setProvider(savedProvider);
+            setApiKey(
+                savedProvider === 'agent-platform'
+                    ? localStorage.getItem('agent_platform_api_key') || ''
+                    : localStorage.getItem('gemini_api_key') || '',
+            );
 
             // Load model
             const savedModel = localStorage.getItem('selected_model');
@@ -188,21 +188,23 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onClos
                             </button>
                             <button
                                 type="button"
-                                disabled
-                                title="Agent Platform trực tiếp cần OAuth2/ADC và không thể dùng API key trong trình duyệt"
-                                className="flex items-center gap-2 p-3 rounded-lg border-2 border-gray-200 bg-gray-50 text-left opacity-60 cursor-not-allowed"
+                                onClick={() => handleProviderChange('agent-platform')}
+                                className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all text-left ${provider === 'agent-platform'
+                                    ? 'border-purple-500 bg-purple-50 shadow-md'
+                                    : 'border-gray-200 bg-white hover:border-gray-300'
+                                    }`}
                             >
-                                <Server className="w-5 h-5 text-gray-400" />
+                                <Server className={`w-5 h-5 ${provider === 'agent-platform' ? 'text-purple-600' : 'text-gray-400'}`} />
                                 <div>
-                                    <div className="font-semibold text-sm text-gray-700">
+                                    <div className={`font-semibold text-sm ${provider === 'agent-platform' ? 'text-purple-700' : 'text-gray-700'}`}>
                                         Agent Platform API
                                     </div>
-                                    <div className="text-xs text-gray-500">Cần OAuth2 khi gọi trực tiếp</div>
+                                    <div className="text-xs text-gray-500">Agent Platform Express mode</div>
                                 </div>
                             </button>
                         </div>
-                        <p className="text-xs text-amber-700 mt-2">
-                            Agent Platform được dùng qua backend có OAuth2/ADC; bản web này dùng Gemini API với API key.
+                        <p className="text-xs text-gray-500 mt-2">
+                            Tự chọn dịch vụ phù hợp. Tiền tố API key không tự quyết định endpoint.
                         </p>
                     </div>
 
@@ -282,7 +284,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onClos
                         </label>
                         {provider === 'agent-platform' && (
                             <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                                Bản web không có OAuth2/ADC để gọi trực tiếp Agent Platform. Khi lưu, app sẽ dùng API key qua Gemini API để tránh lỗi 401.
+                                Dùng API key dành cho Agent Platform. Nếu Google trả về 403 hoặc yêu cầu OAuth2, hãy kiểm tra Agent Platform API, billing, giới hạn API key và quyền model; app không tự đổi sang Gemini API.
                             </div>
                         )}
                         <input
@@ -374,9 +376,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onClos
                             ) : (
                                 <>
                                     <ol className="text-sm text-amber-700 space-y-1 list-decimal list-inside">
-                                        <li>Dùng API key Gemini từ Google AI Studio</li>
-                                        <li>Chọn Gemini API nếu muốn dùng trực tiếp bằng API key</li>
-                                        <li>Agent Platform chuẩn cần OAuth2/ADC, không dùng API key ở trình duyệt</li>
+                                        <li>Mở hướng dẫn tạo API key cho Agent Platform</li>
+                                        <li>Tạo hoặc sao chép API key được cấp cho Agent Platform</li>
+                                        <li>Kiểm tra Agent Platform API, billing, API restrictions và quyền model</li>
                                         <li>Copy key và dán vào ô trên</li>
                                     </ol>
                                     <a

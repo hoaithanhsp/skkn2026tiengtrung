@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 
 import { UserInfo, GenerationStep, GenerationState, SKKNTemplate, SolutionsState, WizardStep } from './types';
 
-import { STEPS_INFO, SOLUTION_MODE_PROMPT, FALLBACK_MODELS, HIGHER_ED_LEVELS, HIGHER_ED_SYSTEM_INSTRUCTION, type AiProvider } from './constants';
+import { STEPS_INFO, SOLUTION_MODE_PROMPT, FALLBACK_MODELS, AGENT_PLATFORM_MODELS, HIGHER_ED_LEVELS, HIGHER_ED_SYSTEM_INSTRUCTION, type AiProvider } from './constants';
 
 import { initializeGeminiChat, sendMessageStream, getFriendlyErrorMessage, parseApiError, getChatHistory, setChatHistory, abortCurrentStream } from './services/geminiService';
 
@@ -103,6 +103,14 @@ const SESSION_SAVE_KEY = 'skkn_session_data';
 
 const AUTO_WRITE_NEXT_KEY = 'skkn_auto_write_next';
 
+const getModelsForProvider = (provider: AiProvider): readonly string[] => (
+  provider === 'agent-platform' ? AGENT_PLATFORM_MODELS : FALLBACK_MODELS
+);
+
+const getDefaultModelForProvider = (provider: AiProvider): string => (
+  getModelsForProvider(provider)[0] || FALLBACK_MODELS[0]
+);
+
 
 
 // Interface cho session data
@@ -192,9 +200,17 @@ const App: React.FC = () => {
 
     // Load API key từ localStorage hoặc .env
 
-    const storedProvider = (localStorage.getItem('google_ai_provider') || 'gemini') as AiProvider;
+    const rawProvider = localStorage.getItem('google_ai_provider');
+    const storedProvider: AiProvider = rawProvider === 'agent-platform' ? 'agent-platform' : 'gemini';
+
+    if (rawProvider === 'vertex') {
+      localStorage.setItem('google_ai_provider', 'gemini');
+      localStorage.setItem('google_ai_provider_selection_source', 'migration');
+      setShowApiModal(true);
+    }
+
     const savedKey = storedProvider === 'agent-platform'
-      ? localStorage.getItem('agent_platform_api_key') || localStorage.getItem('gemini_api_key')
+      ? localStorage.getItem('agent_platform_api_key')
       : localStorage.getItem('gemini_api_key');
 
     const savedModel = localStorage.getItem('selected_model');
@@ -211,7 +227,7 @@ const App: React.FC = () => {
 
       const envKeys = (import.meta.env.VITE_GEMINI_API_KEYS || '').split(',').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
 
-      if (envKeys.length > 0) {
+      if (storedProvider === 'gemini' && envKeys.length > 0) {
 
         const firstEnvKey = envKeys[0];
 
@@ -233,28 +249,20 @@ const App: React.FC = () => {
 
 
 
-    // Load provider
-    const savedProvider: AiProvider = storedProvider === 'agent-platform' ? 'gemini' : storedProvider;
-    setCurrentProvider(savedProvider);
+    setCurrentProvider(storedProvider);
 
-    if (storedProvider === 'agent-platform' && savedKey) {
-      localStorage.setItem('gemini_api_key', savedKey);
-      localStorage.setItem('google_ai_provider', 'gemini');
-      localStorage.setItem('google_ai_provider_selection_source', 'migration');
-      localStorage.setItem('selected_model', FALLBACK_MODELS[0]);
-    }
-
-    // Đồng bộ key đã lưu vào apiKeyManager để tránh xoay nhầm sang backup key cũ
-    if (savedKey && savedProvider === 'gemini') {
+    // Chỉ Gemini dùng bộ xoay key từ VITE_GEMINI_API_KEYS.
+    if (savedKey && storedProvider === 'gemini') {
       apiKeyManager.addKey(savedKey, 'Key của tôi');
       apiKeyManager.setActiveKey(savedKey);
     }
 
-    if (savedModel && storedProvider !== 'agent-platform') {
-      if (FALLBACK_MODELS.includes(savedModel)) {
-        setSelectedModel(savedModel);
-      }
-    }
+    const providerModels = getModelsForProvider(storedProvider);
+    setSelectedModel(
+      savedModel && providerModels.includes(savedModel)
+        ? savedModel
+        : getDefaultModelForProvider(storedProvider),
+    );
 
 
 
@@ -296,25 +304,31 @@ const App: React.FC = () => {
 
 
 
-  const handleSaveApiKey = (key: string, model: string, provider?: AiProvider) => {
-    const resolvedProvider: AiProvider = provider === 'agent-platform' ? 'gemini' : (provider || 'gemini');
-    const resolvedModel = FALLBACK_MODELS.includes(model) ? model : FALLBACK_MODELS[0];
-    // Key đã được lưu riêng theo provider bởi ApiKeyModal
+  const handleSaveApiKey = (key: string, model: string, provider: AiProvider = 'gemini') => {
+    const resolvedProvider: AiProvider = provider === 'agent-platform' ? 'agent-platform' : 'gemini';
+    const providerModels = getModelsForProvider(resolvedProvider);
+    const resolvedModel = providerModels.includes(model)
+      ? model
+      : getDefaultModelForProvider(resolvedProvider);
+
     setApiKey(key);
     setSelectedModel(resolvedModel);
     setCurrentProvider(resolvedProvider);
     setShowApiModal(false);
 
-    // 🆕 ĐỒNG BỘ VÀO apiKeyManager để không bị xoay nhầm sang key cũ đã chết
+    localStorage.setItem(
+      resolvedProvider === 'agent-platform' ? 'agent_platform_api_key' : 'gemini_api_key',
+      key,
+    );
+    localStorage.setItem('google_ai_provider', resolvedProvider);
+    localStorage.setItem('google_ai_provider_selection_source', 'manual');
+    localStorage.setItem('selected_model', resolvedModel);
+
     if (resolvedProvider === 'gemini') {
-      localStorage.setItem('gemini_api_key', key);
-      localStorage.setItem('google_ai_provider', 'gemini');
-      localStorage.setItem('selected_model', resolvedModel);
       apiKeyManager.addKey(key, 'Key của tôi');
       apiKeyManager.setActiveKey(key);
     }
 
-    // Reinitialize chat với provider mới
     if (state.error) {
       setState(prev => ({ ...prev, error: null }));
     }
@@ -510,7 +524,7 @@ const App: React.FC = () => {
 
 
 
-    // Thuật toán gộp mục an toàn tối đa: 
+    // Thuật toán gộp mục an toàn tối đa:
 
     // - Lấy mục Level 1 NẾU nó KHÔNG có mục con (thuộc mĐi level cao hơn nó).
 
@@ -864,13 +878,21 @@ const App: React.FC = () => {
 
       // Initialize Gemini chat với API key
 
-      const savedKey = localStorage.getItem('gemini_api_key');
-
+      const rawProvider = localStorage.getItem('google_ai_provider');
+      const restoredProvider: AiProvider = rawProvider === 'agent-platform' ? 'agent-platform' : 'gemini';
+      const savedKey = restoredProvider === 'agent-platform'
+        ? localStorage.getItem('agent_platform_api_key')
+        : localStorage.getItem('gemini_api_key');
       const savedModel = localStorage.getItem('selected_model');
+      const providerModels = getModelsForProvider(restoredProvider);
 
       if (savedKey) {
 
-        initializeGeminiChat(savedKey, FALLBACK_MODELS.includes(savedModel || '') ? savedModel : undefined, 'gemini');
+        initializeGeminiChat(
+          savedKey,
+          savedModel && providerModels.includes(savedModel) ? savedModel : getDefaultModelForProvider(restoredProvider),
+          restoredProvider,
+        );
 
         // Khôi phục history SAU khi init (vì init reset history)
 
@@ -1769,7 +1791,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
         → Cách mạng công nghiệp 4.0 và yêu cầu nguồn nhân lực chất lượng cao
 
-        
+
 
    1.2. Xuất phát từ thực tiễn giảng dạy
 
@@ -1797,7 +1819,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
         → Trích dẫn chuẩn APA: (Tác giả, Năm)
 
-        
+
 
    2.2. Khung lý thuyết (Theoretical Framework)
 
@@ -1813,7 +1835,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
         [Phân tích sâu + Liên hệ đĐ tài tại ${userInfo.school}]
 
-        
+
 
    2.3. Cơ sở pháp lý
 
@@ -1837,7 +1859,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
         → Chuẩn đầu ra chương trình đào tạo hiện hành
 
-        
+
 
    3.2. Khảo sát giảng viên
 
@@ -1849,11 +1871,11 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
         → Cronbach's Alpha kiểm tra độ tin cậy
 
-        
+
 
    3.3. Khảo sát sinh viên
 
-        → Bảng khảo sát sinh viên ${userInfo.grade} (n=Y)  
+        → Bảng khảo sát sinh viên ${userInfo.grade} (n=Y)
 
         → Kết quả hĐc tập trước khi áp dụng sáng kiến
 
@@ -1863,7 +1885,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
         → Nhu cầu đổi mới phương pháp
 
-        
+
 
    → Phân tích nguyên nhân bằng mô hình Fishbone/SWOT
 
@@ -1879,7 +1901,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
    GIẢI PHĐP 1: [Tên giải pháp - dựa trên nghiên cứu khoa hĐc]
 
-   
+
 
         1.1. Mục tiêu giải pháp (gắn với Chuẩn đầu ra / Learning Outcomes)
 
@@ -1889,7 +1911,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
              → Mục tiêu vĐ kỹ năng mĐm, tư duy phản biện
 
-             
+
 
         1.2. Cơ sở khoa hĐc & Nghiên cứu liên quan
 
@@ -1899,7 +1921,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
              → Điểm mới, sáng tạo so với nghiên cứu trước
 
-             
+
 
         1.3. Thiết kế nghiên cứu & Quy trình
 
@@ -1911,7 +1933,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
              → Công cụ đánh giá: rubric, bài thi, khảo sát
 
-             
+
 
         1.4. Ví dụ minh hĐa cụ thể
 
@@ -1921,7 +1943,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
              → Sản phẩm sinh viên mẫu / Đồ án / Tiểu luận
 
-             
+
 
         1.5. ĐiĐu kiện thực hiện & Hạn chế
 
@@ -1973,7 +1995,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
         → Công cụ thu thập dữ liệu: Bài thi, bảng hĐi Likert, phĐng vấn sâu
 
-        
+
 
    5.2. Kết quả định lượng
 
@@ -1987,7 +2009,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
         → Biểu đồ so sánh nhóm thực nghiệm vs đối chứng
 
-        
+
 
    5.3. Kết quả định tính
 
@@ -2033,7 +2055,7 @@ CẤU TRÚC SKKN BẬC CAO (TRUNG CẤP / CAO ĐẲNG / ĐẠI HỌC):
 
 
 
-2. Khuyến nghị  
+2. Khuyến nghị
 
    → Với nhà trưĐng / Ban giám hiệu
 
@@ -2097,7 +2119,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
         → Xu hướng chuyển đổi số trong giáo dục
 
-        
+
 
    1.2. Xuất phát từ thực tiễn dạy - hĐc hiện nay
 
@@ -2119,7 +2141,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
         → Định nghĩa, thuật ngữ then chốt (DIỄN GIẢI theo cách riêng, không copy)
 
-        
+
 
    2.2. Cơ sở pháp lý (TÓM TẮT TINH THẦN, không trích nguyên văn)
 
@@ -2129,7 +2151,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
         → Công văn chỉ đạo của Bộ/Sở GD&ĐT
 
-        
+
 
    2.3. Cơ sở lý luận giáo dục (ChĐn 2-3 lý thuyết PHÙ HỢP)
 
@@ -2155,7 +2177,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
         → Xu hướng dạy hĐc hiện nay
 
-        
+
 
    3.2. Thực trạng đối với giáo viên
 
@@ -2165,11 +2187,11 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
         → Phương pháp đang sử dụng
 
-        
+
 
    3.3. Thực trạng đối với hĐc sinh
 
-        → Bảng khảo sát hĐc sinh ${userInfo.grade} (n=Y)  
+        → Bảng khảo sát hĐc sinh ${userInfo.grade} (n=Y)
 
         → Kết quả hĐc tập trước khi áp dụng sáng kiến
 
@@ -2177,7 +2199,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
         → Những khó khăn hĐc sinh gặp phải
 
-        
+
 
    → Phân tích nguyên nhân (khách quan + chủ quan)
 
@@ -2193,7 +2215,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
    GIẢI PHĐP 1: [Tên giải pháp cụ thể, ấn tượng]
 
-   
+
 
         1.1. Mục tiêu của giải pháp
 
@@ -2203,7 +2225,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
              → Mục tiêu vĐ phẩm chất
 
-             
+
 
         1.2. Nội dung và cách thực hiện
 
@@ -2213,7 +2235,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
              → Điểm mới, sáng tạo
 
-             
+
 
         1.3. Quy trình thực hiện (5-7 bước cụ thể)
 
@@ -2227,7 +2249,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
              Bước 5: [Tên bước] - [Chi tiết cách làm]
 
-             
+
 
         1.4. Ví dụ minh hĐa cụ thể
 
@@ -2237,7 +2259,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
              → Sản phẩm hĐc sinh mẫu
 
-             
+
 
         1.5. ĐiĐu kiện thực hiện & Lưu ý
 
@@ -2289,7 +2311,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
         → Đánh giá mức độ phù hợp với thực tiễn
 
-        
+
 
    5.2. Nội dung thực nghiệm
 
@@ -2299,7 +2321,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
         → Phạm vi áp dụng
 
-        
+
 
    5.3. Tổ chức thực nghiệm
 
@@ -2345,7 +2367,7 @@ CẤU TRÚC SKKN CHUẨN (ĐP DỤNG KHI KHÔNG CÓ MẪU RIÊNG):
 
 
 
-2. Khuyến nghị  
+2. Khuyến nghị
 
    → Với nhà trưĐng
 
@@ -2558,7 +2580,7 @@ QUAN TRỌNG:
 
       const errorType = parseApiError(error);
 
-      if (errorType === 'QUOTA_EXCEEDED' || errorType === 'RATE_LIMIT') {
+      if (currentProvider === 'gemini' && (errorType === 'QUOTA_EXCEEDED' || errorType === 'RATE_LIMIT')) {
 
         const rotation = apiKeyManager.markKeyError(apiKey, errorType);
 
@@ -2584,7 +2606,7 @@ QUAN TRỌNG:
 
       }
 
-      setState(prev => ({ ...prev, isStreaming: false, error: error.message || "Failed to generate." }));
+      setState(prev => ({ ...prev, isStreaming: false, error: getFriendlyErrorMessage(error).message }));
 
     }
 
@@ -2616,13 +2638,13 @@ QUAN TRỌNG:
 
 "${outlineFeedback}"
 
-      
 
-      Hãy viết lại TOÀN BỘ Dàn ý chi tiết mới đã được cập nhật theo yêu cầu trên. 
+
+      Hãy viết lại TOÀN BỘ Dàn ý chi tiết mới đã được cập nhật theo yêu cầu trên.
 
       Vẫn đảm bảo cấu trúc chuẩn SKKN.
 
-      
+
 
       Lưu ý các quy tắc định dạng:
 
@@ -2630,7 +2652,7 @@ QUAN TRỌNG:
 
       - Tách đoạn rõ ràng.
 
-      
+
 
       Kết thúc phần dàn ý, hãy xuống dòng và hiển thị hộp thoại:
 
@@ -2683,7 +2705,7 @@ QUAN TRỌNG:
 
     } catch (error: any) {
 
-      setState(prev => ({ ...prev, isStreaming: false, error: error.message }));
+      setState(prev => ({ ...prev, isStreaming: false, error: getFriendlyErrorMessage(error).message }));
 
     }
 
@@ -2776,9 +2798,9 @@ ${SOLUTION_MODE_PROMPT}
 
         BẮT ĐẦU phản hồi bằng MENU NAVIGATION trạng thái Bước 3(Viết Phần I & II - Đang thực hiện).
 
-        
 
-        Đây là bản DÀN Đ CHĐNH THỨC mà tôi đã chốt(tôi có thể đã chỉnh sửa trực tiếp). 
+
+        Đây là bản DÀN Đ CHĐNH THỨC mà tôi đã chốt(tôi có thể đã chỉnh sửa trực tiếp).
 
         Hãy DÙNG CHĐNH XĐC NỘI DUNG NÀY để làm cơ sở triển khai các phần tiếp theo, không tự ý thay đổi cấu trúc của nó:
 
@@ -2804,7 +2826,7 @@ ${SOLUTION_MODE_PROMPT}
 
 ${THEORY_GUIDE}
 
-        
+
 
         ⚠Đ LƯU Đ FORMAT:
 
@@ -2816,7 +2838,7 @@ ${THEORY_GUIDE}
 
         - Menu Navigation: Đánh dấu Bước 2 đã xong(✅), Bước 3 đang làm(🔵).
 
-        
+
 
         Viết sâu sắc, hĐc thuật, đúng cấu trúc đã đĐ ra.Lưu ý bám sát thông tin vĐ trưĐng và địa phương đã cung cấp.
 
@@ -2993,13 +3015,13 @@ Bạn đã viết xong toàn bộ nội dung chính của SKKN theo đúng cấu
 
 
 
-              Tiếp tục BƯỚC 3(tiếp): Viết chi tiết PHẦN III(Thực trạng vấn đĐ). 
+              Tiếp tục BƯỚC 3(tiếp): Viết chi tiết PHẦN III(Thực trạng vấn đĐ).
 
               Nhớ tạo bảng số liệu khảo sát giả định logic phù hợp với đối tượng nghiên cứu là: ${userInfo.researchSubjects || "HĐc sinh"}.
 
               Phân tích nguyên nhân và thực trạng tại ${userInfo.school}, ${userInfo.location} và điĐu kiện CSVC thực tế: ${userInfo.facilities}.
 
-              
+
 
               ⚠Đ NHẮC LẠI: Đây là SKKN cấp ${userInfo.level}, khối ${userInfo.grade}, môn ${userInfo.subject}.
 
@@ -3007,7 +3029,7 @@ Bạn đã viết xong toàn bộ nội dung chính của SKKN theo đúng cấu
 
               🚫 TUYỆT ĐĐI KHÔNG nhầm sang THPT, THCS hoặc cấp hĐc khác nếu đĐ tài không thuộc cấp đó!
 
-              
+
 
               ⚠Đ LƯU Đ FORMAT:
 
@@ -3017,7 +3039,7 @@ Bạn đã viết xong toàn bộ nội dung chính của SKKN theo đúng cấu
 
               - Bảng số liệu phải tuân thủ format Markdown chuẩn: | Tiêu đĐ | Số liệu |.
 
-              
+
 
               🖼Đ GỢI Đ HÌNH ẢNH MINH HỌA(BẮT BUỘC):
 
@@ -3053,7 +3075,7 @@ Bạn đã viết xong toàn bộ nội dung chính của SKKN theo đúng cấu
 
   ${SOLUTION_MODE_PROMPT}
 
-      
+
 
               ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ
 
@@ -3061,7 +3083,7 @@ Bạn đã viết xong toàn bộ nội dung chính của SKKN theo đúng cấu
 
               ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ
 
-              
+
 
               Thông tin đĐ tài: "${userInfo.topic}"
 
@@ -3077,7 +3099,7 @@ SGK: ${userInfo.textbook} (🚨 BẮT BUỘC dùng đúng bộ sách này, KHÔN
 
               TrĐng tâm đĐ tài: ${userInfo.focus || 'Theo dàn ý đã duyệt'}
 
-              
+
 
               ╔ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ╗
 
@@ -3087,7 +3109,7 @@ SGK: ${userInfo.textbook} (🚨 BẮT BUỘC dùng đúng bộ sách này, KHÔN
 
               ${state.fullDocument ? `Dưới đây là DÀN Đ ĐÃ ĐƯỢC DUYỆT. Giải pháp 1 PHẢI viết ĐÚNG theo tên và nội dung đã ghi trong dàn ý:
 
-              
+
 
 ${state.fullDocument.substring(0, 3000)}
 
@@ -3103,7 +3125,7 @@ ${state.fullDocument.substring(0, 3000)}
 
 - MĐi ví dụ, bài hĐc minh hĐa phải thuộc môn ${userInfo.subject}, khối ${userInfo.grade}.` : 'Chưa có dàn ý - viết theo đĐ tài.'}
 
-              
+
 
               YÊU CẦU:
 
@@ -3111,7 +3133,7 @@ ${state.fullDocument.substring(0, 3000)}
 
               Giải pháp phải khả thi với điĐu kiện CSVC: ${userInfo.facilities}.
 
-              
+
 
               QUAN TRỌNG: Tuân thủ "YÊU CẦU ĐỊNH DẠNG OUTPUT" vừa cung cấp:
 
@@ -3121,13 +3143,13 @@ ${state.fullDocument.substring(0, 3000)}
 
               3. Sử dụng Format "KẾT THÚC GIẢI PHĐP" ở cuối.
 
-              
+
 
               Lưu ý đặc biệt: Phải có VĐ DỤ MINH HỌA(Giáo án / Hoạt động) cụ thể theo SGK ${userInfo.textbook}.
 
               Menu Navigation: Đánh dấu Bước 5 đang làm(🔵).
 
-              
+
 
               🖼Đ GỢI Đ HÌNH ẢNH MINH HỌA(BắT BUỘC):
 
@@ -3158,18 +3180,18 @@ ${state.fullDocument.substring(0, 3000)}
               BẮT ĐẦU phản hồi bằng MENU NAVIGATION trạng thái(Viết Giải pháp 2 - Đang thực hiện).
 
               Tiếp tục giữ vững vai trò CHUYÊN GIA GIÁO DỤC(ULTRA MODE).
-              
+
               Nhiệm vụ: Viết chi tiết GIẢI PHÁP 2 cho đề tài: "${userInfo.topic}".
               Môn: ${userInfo.subject} - Lớp: ${userInfo.grade} - Cấp: ${userInfo.level}
               Trường: ${userInfo.school}, ${userInfo.location}
-              
+
               ╔═══════════════════════════════════════════════════════════╗
               ║  🚨 NHẮC LẠI DÀN Ý - BẮT BUỘC BÁM SÁT 🚨          ║
               ╚══════════════════════════════════════════════════════════╝
               ⚠️ BẮT BUỘC: Tên GIẢI PHÁP 2 PHẢI TRÙNG KHỚP với tên giải pháp 2 trong dàn ý đã duyệt ở trên.
               Nội dung PHẢI xoay quanh đề tài "${userInfo.topic}", phù hợp môn ${userInfo.subject}.
               TUYỆT ĐỐI KHÔNG viết lạc đề hoặc chuyển sang chủ đề khác.
-              
+
               Yêu cầu:
 1. Nội dung độc đáo, KHÔNG trùng lặp với Giải pháp 1.
 2. Tận dụng tối đa CSVC: ${userInfo.facilities}.
@@ -3178,7 +3200,7 @@ ${state.fullDocument.substring(0, 3000)}
                  - Xuống 2 dòng sau mỗi đoạn.
                  - Có khung "KẾT THÚC GIẢI PHÁP" ở cuối.
               4. Phải có VÍ DỤ MINH HỌA cụ thể theo SGK ${userInfo.textbook} (🚨 ĐÚNG bộ sách này, KHÔNG dùng bộ sách khác).
-              
+
               🖼️ GỢI Ý HÌNH ẢNH MINH HỌA(BẮT BUỘC):
               Trong GIẢI PHÁP 2, hãy gợi ý 1 - 2 vị trí nên đặt hình ảnh minh họa với format:
               ** [🖼️ GỢI Ý HÌNH ẢNH: Mô tả chi tiết hình ảnh - Đặt sau phần nào] **
@@ -3203,13 +3225,13 @@ ${CONCLUSION_GUIDE}
     - 5.3.Tổ chức thực nghiệm(Bảng so sánh TRƯỚC - SAU với số liệu lẻ)
 
 6. ĐIỀU KIỆN ĐỂ SÁNG KIẾN ĐƯỢC NHÂN RỘNG(1 - 2 trang)
-                
+
                 KẾT LUẬN VÀ KHUYẾN NGHỊ(2 - 3 trang)
-                
+
                 TÀI LIỆU THAM KHẢO(8 - 12 tài liệu)
-                
+
                 Đảm bảo số liệu phần Kết quả phải LOGIC.Sử dụng số liệu lẻ.
-                
+
                 🖼️ GỢI Ý HÌNH ẢNH MINH HỌA.
 
   ${getPageLimitPrompt()}
@@ -3224,18 +3246,18 @@ ${CONCLUSION_GUIDE}
               BẮT ĐẦU phản hồi bằng MENU NAVIGATION trạng thái(Viết Giải pháp 3 - Đang thực hiện).
 
               Tiếp tục giữ vững vai trò CHUYÊN GIA GIÁO DỤC(ULTRA MODE).
-              
+
               Nhiệm vụ: Viết chi tiết GIẢI PHÁP 3 cho đề tài: "${userInfo.topic}".
               Môn: ${userInfo.subject} - Lớp: ${userInfo.grade} - Cấp: ${userInfo.level}
               Trường: ${userInfo.school}, ${userInfo.location}
-              
+
               ╔═══════════════════════════════════════════════════════════╗
               ║  🚨 NHẮC LẠI DÀN Ý - BẮT BUỘC BÁM SÁT 🚨          ║
               ╚══════════════════════════════════════════════════════════╝
               ⚠️ BẮT BUỘC: Tên GIẢI PHÁP 3 PHẢI TRÙNG KHỚP với tên giải pháp 3 trong dàn ý đã duyệt.
               Nội dung PHẢI xoay quanh đề tài "${userInfo.topic}", phù hợp môn ${userInfo.subject}.
               TUYỆT ĐỐI KHÔNG viết lạc đề hoặc chuyển sang chủ đề khác.
-              
+
               Yêu cầu:
 1. Nội dung độc đáo, KHÔNG trùng lặp với Giải pháp 1 và 2.
 2. Tận dụng tối đa CSVC: ${userInfo.facilities}.
@@ -3244,7 +3266,7 @@ ${CONCLUSION_GUIDE}
                  - Xuống 2 dòng sau mỗi đoạn.
                  - Có khung "KẾT THÚC GIẢI PHÁP" ở cuối.
               4. Phải có VÍ DỤ MINH HỌA cụ thể theo SGK ${userInfo.textbook} (🚨 ĐÚNG bộ sách này, KHÔNG dùng bộ sách khác).
-              
+
               🖼️ GỢI Ý HÌNH ẢNH MINH HỌA(BẮT BUỘC):
               Trong GIẢI PHÁP 3, hãy gợi ý 1 - 2 vị trí nên đặt hình ảnh minh họa.
 
@@ -3268,13 +3290,13 @@ ${CONCLUSION_GUIDE}
     - 5.3.Tổ chức thực nghiệm(Bảng so sánh TRƯỚC - SAU với số liệu lẻ)
 
 6. ĐIỀU KIỆN ĐỂ SÁNG KIẾN ĐƯỢC NHÂN RỘNG(1 - 2 trang)
-                
+
                 KẾT LUẬN VÀ KHUYẾN NGHỊ(2 - 3 trang)
-                
+
                 TÀI LIỆU THAM KHẢO(8 - 12 tài liệu)
-                
+
                 Đảm bảo số liệu phần Kết quả phải LOGIC.Sử dụng số liệu lẻ.
-                
+
                 🖼️ GỢI Ý HÌNH ẢNH MINH HỌA.
 
   ${getPageLimitPrompt()}
@@ -3292,25 +3314,25 @@ ${CONCLUSION_GUIDE}
 
                 Tiếp tục giữ vững vai trò CHUYÊN GIA GIĐO DỤC(ULTRA MODE).
 
-                
+
 
                 Nhiệm vụ: Viết chi tiết GIẢI PHĐP 4(Mở rộng / Nâng cao) cho đĐ tài: "${userInfo.topic}".
 
                 Môn: ${userInfo.subject} - Lớp: ${userInfo.grade} - Cấp: ${userInfo.level}
 
-                
+
 
                 ⚠Đ BẮT BUỘC: Tên GIẢI PHĐP 4 PHẢI TRÙNG KHỚP với dàn ý đã duyệt.
 
                 Nội dung PHẢI xoay quanh đĐ tài "${userInfo.topic}", phù hợp môn ${userInfo.subject}.
 
-                
+
 
                 ⚠Đ LƯU Đ: Đây là giải pháp MỞ RỘNG và NÂNG CAO.
 
                 Có thể là: Ứng dụng công nghệ / AI nâng cao, phát triển mở rộng đối tượng...
 
-                
+
 
                 Yêu cầu:
 
@@ -3356,19 +3378,19 @@ ${CONCLUSION_GUIDE}
 
 6. ĐIỀU KIỆN ĐỂ SĐNG KIẾN ĐƯỢC NHÂN RỘNG(1 - 2 trang)
 
-                
+
 
                 KẾT LUẬN VÀ KHUYẾN NGHỊ(2 - 3 trang)
 
-                
+
 
                 TÀI LIỆU THAM KHẢO(8 - 12 tài liệu)
 
-                
+
 
                 Đảm bảo số liệu phần Kết quả phải LOGIC.Sử dụng số liệu lẻ(42.3 %, 67.8 %).
 
-                
+
 
                 🖼Đ GỢI Đ HÌNH ẢNH MINH HỌA.
 
@@ -3446,13 +3468,13 @@ ${CONCLUSION_GUIDE}
 
               ✅ SKKN ĐÃ HOÀN THÀNH!
 
-              
+
 
               Bạn đã viết xong toàn bộ nội dung chính của SKKN.
 
               Bao gồm: Đặt vấn đĐ, Cơ sở lý luận, Thực trạng, Giải pháp, Kết quả và Kết luận.
 
-              
+
 
               📌 BÂY GIỜ BẠN CÓ THỂ:
 
@@ -3462,7 +3484,7 @@ ${CONCLUSION_GUIDE}
 
 3. Kiểm tra lại nội dung và định dạng
 
-              
+
 
               Chúc mừng bạn đã hoàn thành bản thảo SKKN!`,
 
@@ -3535,7 +3557,7 @@ ${CONCLUSION_GUIDE}
 
       const errorType = parseApiError(error);
 
-      if (errorType === 'QUOTA_EXCEEDED' || errorType === 'RATE_LIMIT') {
+      if (currentProvider === 'gemini' && (errorType === 'QUOTA_EXCEEDED' || errorType === 'RATE_LIMIT')) {
 
         const rotation = apiKeyManager.markKeyError(apiKey, errorType);
 
@@ -3656,7 +3678,7 @@ ${CONCLUSION_GUIDE}
 
         ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ
 
-        
+
 
         ⚠Đ QUAN TRỌNG: Bạn PHẢI dựa vào NỘI DUNG SKKN ĐÃ VIẾT bên dưới để tạo phụ lục.
 
@@ -3664,7 +3686,7 @@ ${CONCLUSION_GUIDE}
 
         KHÔNG tạo phụ lục liên quan đến hình ảnh, video(vì không thể hiển thị).
 
-        
+
 
         ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ
 
@@ -3672,11 +3694,11 @@ ${CONCLUSION_GUIDE}
 
         ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ
 
-        
+
 
         ${state.fullDocument}
 
-        
+
 
         ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ
 
@@ -3700,7 +3722,7 @@ ${CONCLUSION_GUIDE}
 
 - SGK: ${userInfo.textbook || "Hiện hành"}
 
-        
+
 
         ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ
 
@@ -3712,7 +3734,7 @@ ${CONCLUSION_GUIDE}
 
 ${APPENDIX_GUIDE}
 
-        
+
 
         Dựa trên NỘI DUNG SKKN ĐÃ VIẾT ở trên, hãy tạo ĐẦY ĐỦ, CHI TIẾT từng tài liệu phụ lục sau:
 
@@ -3724,7 +3746,7 @@ ${APPENDIX_GUIDE}
 
         ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ
 
-        
+
 
         ** PHẦN A: PHIẾU KHẢO SĐT TRƯỚC KHI ĐP DỤNG SĐNG KIẾN **
 
@@ -3742,11 +3764,11 @@ ${APPENDIX_GUIDE}
 
         ...
 
-        
+
 
         Ghi chú: 1 = Rất không đồng ý, 2 = Không đồng ý, 3 = Bình thưĐng, 4 = Đồng ý, 5 = Rất đồng ý
 
-        
+
 
         Nội dung câu hĐi(10 - 12 câu):
 
@@ -3802,7 +3824,7 @@ ${APPENDIX_GUIDE}
 
         | -----| ----------| ------------------| --------------| --------------| ----------| ---------------|
 
-        
+
 
         ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ
 
@@ -3810,7 +3832,7 @@ ${APPENDIX_GUIDE}
 
         ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ
 
-        
+
 
         ** KHUNG KẾ HOẠCH BÀI DẠY **
 
@@ -3824,7 +3846,7 @@ Tổ: [Tổ chuyên môn]
 
         HĐ và tên giáo viên: ……………………
 
-        
+
 
         ** TÊN BÀI DẠY: [ChĐn một bài cụ thể từ SGK ${userInfo.textbook || "hiện hành"} phù hợp với đĐ tài] **
 
@@ -3866,11 +3888,11 @@ Tổ: [Tổ chuyên môn]
 
         - ĐiĐu kiện CSVC: ${userInfo.facilities}
 
-        
+
 
         ** III.TIẾN TRÌNH DẠY HỌC **
 
-        
+
 
         ** 1. Hoạt động 1: Mở đầu / Khởi động(...phút) **
 
@@ -3986,7 +4008,7 @@ Tổ: [Tổ chuyên môn]
 
         ĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐĐ
 
-        
+
 
         📌 VỀ NỘI DUNG:
 
@@ -4004,7 +4026,7 @@ Tổ: [Tổ chuyên môn]
 
             - Nếu dàn ý SKKN có đĐ cập phụ lục khác(chưa liệt kê ở trên), hãy TẠO THÊM
 
-        
+
 
         📌 VỀ FORMAT:
 
@@ -4024,7 +4046,7 @@ Tổ: [Tổ chuyên môn]
 
         - KHÔNG ghi "...", "[nội dung]", "[điĐn vào]" - phải viết nội dung thực tế
 
-        
+
 
         📌 KHÔNG TẠO:
 
@@ -4032,7 +4054,7 @@ Tổ: [Tổ chuyên môn]
 
   - Phụ lục yêu cầu file đính kèm
 
-        
+
 
         Đ KẾT THÚC bằng dòng:
 
@@ -4243,7 +4265,7 @@ Tổ: [Tổ chuyên môn]
 
         <div className="mt-auto pt-6 border-t border-gray-100">
 
-          {state.step > GenerationStep.INPUT_FORM && (
+          {state.step > GenerationStep.INPUT_FORM && currentProvider === 'gemini' && (
 
             <div className="space-y-3">
 

@@ -20,14 +20,15 @@ export const FALLBACK_MODELS: string[] = [
 
 // Agent Platform API — model list & fallback (api.md §III)
 export const AGENT_PLATFORM_MODELS: readonly string[] = [
+   'gemini-2.5-flash',
    'gemini-2.5-flash-lite',
    'gemini-2.5-pro',
    'gemini-3.1-pro-preview',
 ] as const;
 
 export const AGENT_PLATFORM_FALLBACK_MODELS: readonly string[] = [
+   'gemini-2.5-flash',
    'gemini-2.5-flash-lite',
-   'gemini-2.5-pro',
 ] as const;
 
 // Thông tin hiển thị cho các model AI
@@ -56,8 +57,8 @@ export const MODEL_INFO: Record<string, { name: string; description: string; isD
    },
    'gemini-2.5-flash': {
       name: 'Gemini 2.5 Flash',
-      description: 'Dự phòng ổn định cao, tốc độ xử lý nhanh',
-      provider: 'gemini'
+      description: 'Model mặc định Agent Platform; dự phòng ổn định, tốc độ xử lý nhanh',
+       provider: 'both'
    },
    // ---- Agent Platform API models ----
    'gemini-2.5-flash-lite': {

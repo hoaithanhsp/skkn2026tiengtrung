@@ -11,8 +11,9 @@ export const createGoogleAiClient = (
   provider: AiProvider = 'gemini',
 ): GoogleGenAI => {
   if (provider === 'agent-platform') {
-    console.warn('Agent Platform browser mode dùng Gemini API để xác thực bằng API key.');
+    return new GoogleGenAI({ vertexai: true, apiKey });
   }
+
   return new GoogleGenAI({ apiKey });
 };
 
@@ -35,65 +36,42 @@ export type ApiErrorType =
 const FALLBACKABLE_ERRORS: ApiErrorType[] = ['MODEL_OVERLOADED', 'NOT_FOUND', 'STREAM_INTERRUPTED'];
 
 export const parseApiError = (error: any): ApiErrorType => {
-  const errorMessage = (error?.message || error?.toString() || '').toLowerCase();
-  const statusCode = error?.status || error?.code || error?.httpCode || 0;
-  const errorString = JSON.stringify(error).toLowerCase();
+  const errorMessage = String(error?.message || error?.toString() || '').toLowerCase();
+  const errorString = JSON.stringify(error || '').toLowerCase();
+  const combined = errorMessage + ' ' + errorString;
+  const rawStatus = error?.status ?? error?.code ?? error?.httpCode;
+  const statusCode = Number(rawStatus) || 0;
 
-  // 500/503/504 hoặc text overloaded → MODEL_OVERLOADED (cho phép fallback)
-  if (statusCode === 500 || statusCode === 503 || statusCode === 504 ||
-    errorMessage.includes('internal') || errorMessage.includes('unavailable') ||
-    errorMessage.includes('deadline_exceeded') ||
-    errorMessage.includes('overloaded') || errorMessage.includes('high demand') ||
-    errorMessage.includes('try again later') || errorMessage.includes('temporarily unavailable') ||
-    errorString.includes('503') || errorString.includes('500')) {
-    return 'MODEL_OVERLOADED';
-  }
-
-  // 404 NOT_FOUND → cho phép fallback
-  if (statusCode === 404 || errorMessage.includes('not_found') ||
-    errorMessage.includes('not found') || errorString.includes('404')) {
-    return 'NOT_FOUND';
-  }
-
-  // SDK có thể ném lỗi này nếu kết nối stream bị đóng giữa một event JSON.
-  // Đây là lỗi tạm thời của stream, không phải lỗi API key hay dữ liệu người dùng.
-  if (errorMessage.includes('incomplete json segment') ||
-    errorMessage.includes('unexpected end of json input') ||
-    errorMessage.includes('unterminated string in json')) {
-    return 'STREAM_INTERRUPTED';
-  }
-
-  // 401 / API_KEY_INVALID → dừng ngay
-  if (statusCode === 401 || errorMessage.includes('api_key_invalid') ||
-    errorMessage.includes('unauthorized')) {
+  if (statusCode === 401 || /api_key_invalid|unauthenticated|unauthorized|credentials_missing/.test(combined)) {
     return 'INVALID_API_KEY';
   }
 
-  // 403 / PERMISSION_DENIED → dừng ngay (riêng Agent Platform có thể thử model tiếp)
-  if (statusCode === 403 || errorMessage.includes('permission_denied')) {
+  if (statusCode === 403 || /permission_denied|forbidden/.test(combined)) {
     return 'PERMISSION_DENIED';
   }
 
-  // 429 / RESOURCE_EXHAUSTED → dừng ngay, KHÔNG đánh dấu key invalid
-  if (statusCode === 429 || errorMessage.includes('quota') ||
-    errorMessage.includes('resource_exhausted') || errorMessage.includes('exceeded')) {
-    return 'QUOTA_EXCEEDED';
+  if (statusCode === 429 || /resource_exhausted|quota|rate.?limit|too many requests/.test(combined)) {
+    return combined.includes('rate') && combined.includes('limit') ? 'RATE_LIMIT' : 'QUOTA_EXCEEDED';
   }
 
-  // Rate limit
-  if (errorMessage.includes('rate') && errorMessage.includes('limit')) {
-    return 'RATE_LIMIT';
-  }
-
-  // 400 / INVALID_ARGUMENT → dừng ngay
-  if (statusCode === 400 || errorMessage.includes('invalid_argument') ||
-    errorMessage.includes('bad request')) {
+  if (statusCode === 400 || /invalid_argument|bad request/.test(combined)) {
     return 'INVALID_ARGUMENT';
   }
 
-  // Network error
-  if (errorMessage.includes('network') || errorMessage.includes('fetch') ||
-    errorMessage.includes('connection') || errorMessage.includes('econnrefused')) {
+  if (statusCode === 404 || /not_found|not found/.test(combined)) {
+    return 'NOT_FOUND';
+  }
+
+  if (statusCode === 500 || statusCode === 503 || statusCode === 504 ||
+    /internal|unavailable|deadline_exceeded|overloaded|high demand|try again later|temporarily unavailable/.test(combined)) {
+    return 'MODEL_OVERLOADED';
+  }
+
+  if (/incomplete json segment|unexpected end of json input|unterminated string in json/.test(errorMessage)) {
+    return 'STREAM_INTERRUPTED';
+  }
+
+  if (/network|fetch|connection|econnrefused/.test(errorMessage)) {
     return 'NETWORK_ERROR';
   }
 
@@ -117,9 +95,9 @@ export const getFriendlyErrorMessage = (error: any): { type: string; title: stri
       title: '⚙️ Cấu hình xác thực không phù hợp',
       message: 'Yêu cầu đang được gửi tới endpoint cần OAuth2, trong khi app chỉ có API key.',
       suggestions: [
-        '🔑 Mở Cài đặt API Key và chọn Gemini API',
-        '🔄 Lưu lại cấu hình rồi tải lại trang',
-        '🛠️ Nếu cần Agent Platform trực tiếp, phải dùng backend có OAuth2/ADC; không gửi token đó từ trình duyệt'
+        '🔑 Kiểm tra bạn đã chọn đúng Agent Platform API và dùng key dành cho dịch vụ này',
+          '🔧 Kiểm tra Agent Platform API, billing, API restrictions và quyền model trong Google Cloud',
+          '🛠️ Nếu endpoint của dự án chỉ chấp nhận OAuth2, cần cấu hình backend an toàn; không gửi thông tin xác thực OAuth2 từ trình duyệt'
       ]
     };
   }
@@ -280,9 +258,8 @@ const getModelConfig = (model: string) => {
   if (cfg.temperature !== undefined) config.temperature = cfg.temperature;
   if (cfg.topK !== undefined) config.topK = cfg.topK;
   if (cfg.topP !== undefined) config.topP = cfg.topP;
-  // Với Gemini 3.x: Chỉ nên để thinkingLevel là 'LOW' hoặc 'MEDIUM' để phản hồi nhanh, không nghẽn token
   if (cfg.thinkingLevel) {
-    config.thinkingConfig = { thinkingLevel: 'LOW' }; // Thay vì 'HIGH'
+    config.thinkingConfig = { thinkingLevel: cfg.thinkingLevel };
   } else if (cfg.thinkingBudget) {
     config.thinkingConfig = { thinkingBudget: cfg.thinkingBudget };
   }
@@ -306,21 +283,54 @@ const createChatSession = (model: string) => {
 };
 
 // Sắp xếp models — chọn fallback list theo provider
-const getOrderedModels = (): string[] => {
-  const fallbackList = currentProvider === 'agent-platform'
+const getOrderedModelsForProvider = (selectedModel: string | undefined, provider: AiProvider): string[] => {
+  const fallbackList = provider === 'agent-platform'
     ? [...AGENT_PLATFORM_FALLBACK_MODELS]
     : [...FALLBACK_MODELS];
 
-  if (!currentSelectedModel) return fallbackList;
+  return selectedModel
+    ? [selectedModel, ...fallbackList.filter((model) => model !== selectedModel)]
+    : fallbackList;
+};
 
-  // Đưa model được chọn lên đầu, loại trùng
-  const orderedModels = [currentSelectedModel];
-  for (const model of fallbackList) {
-    if (model !== currentSelectedModel) {
-      orderedModels.push(model);
+const getOrderedModels = (): string[] => (
+  getOrderedModelsForProvider(currentSelectedModel || undefined, currentProvider)
+);
+
+export const generateContentWithFallback = async ({
+  apiKey,
+  provider = 'gemini',
+  selectedModel,
+  contents,
+  config,
+}: {
+  apiKey: string;
+  provider?: AiProvider;
+  selectedModel?: string;
+  contents: any;
+  config?: any;
+}): Promise<any> => {
+  const ai = createGoogleAiClient(apiKey, provider);
+  const modelsToTry = getOrderedModelsForProvider(selectedModel, provider);
+  let lastError: any = null;
+
+  for (const model of modelsToTry) {
+    try {
+      return await ai.models.generateContent({
+        model,
+        contents,
+        config: {
+          ...getModelConfig(model),
+          ...(config || {}),
+        },
+      });
+    } catch (error: any) {
+      lastError = error;
+      if (!isFallbackableError(parseApiError(error), provider)) break;
     }
   }
-  return orderedModels;
+
+  throw lastError || new Error('Không thể tạo nội dung từ AI.');
 };
 
 // ============================================================
@@ -411,14 +421,14 @@ export const sendSinglePromptStream = async (message: string, onChunk: (text: st
       let fullResponse = "";
       let receivedFirstChunk = false;
       const totalTimeout = createTimeout(TOTAL_STREAM_TIMEOUT_MS, '[SinglePrompt] Tổng thời gian stream quá dài');
-      
+
       try {
         const iterator = response[Symbol.asyncIterator]();
-        
+
         while (true) {
           const timeoutMs = receivedFirstChunk ? INTER_CHUNK_TIMEOUT_MS : FIRST_CHUNK_TIMEOUT_MS;
           const chunkTimeout = createTimeout(timeoutMs, `[SinglePrompt] Chờ chunk từ ${model}`);
-          
+
           let result: IteratorResult<any>;
           try {
             result = await Promise.race([
@@ -429,9 +439,9 @@ export const sendSinglePromptStream = async (message: string, onChunk: (text: st
           } finally {
             chunkTimeout.clear();
           }
-          
+
           if (result.done) break;
-          
+
           const chunk = result.value;
           if (chunk.text) {
             receivedFirstChunk = true;
@@ -588,8 +598,6 @@ export const analyzeDocumentForSKKN = async (
   provider?: AiProvider
 ): Promise<string> => {
   const actualProvider: AiProvider = provider || (localStorage.getItem('google_ai_provider') as AiProvider) || 'gemini';
-  const ai = createGoogleAiClient(apiKey, actualProvider);
-
   // Giới hạn nội dung để tránh vượt token limit
   const truncatedContent = documentContent.substring(0, 20000);
 
@@ -652,36 +660,14 @@ Hãy phân tích và trả về kết quả theo format sau:
 
 ⚠️ Lưu ý: Trả lời ngắn gọn, súc tích, tập trung vào thông tin cần thiết nhất.`;
 
-  const fallbackList = actualProvider === 'agent-platform'
-    ? [...AGENT_PLATFORM_FALLBACK_MODELS]
-    : [...FALLBACK_MODELS];
+  const response = await generateContentWithFallback({
+    apiKey,
+    provider: actualProvider,
+    selectedModel,
+    contents: prompt,
+  });
 
-  const modelsToTry = selectedModel
-    ? [selectedModel, ...fallbackList.filter(m => m !== selectedModel)]
-    : [...fallbackList];
-
-  let lastError: any = null;
-
-  for (let i = 0; i < modelsToTry.length; i++) {
-    const model = modelsToTry[i];
-    try {
-      const response = await ai.models.generateContent({
-        model: model,
-        contents: prompt
-      });
-
-      return response.text || 'Không thể phân tích tài liệu. Vui lòng thử lại.';
-    } catch (error: any) {
-      lastError = error;
-      const errorType = parseApiError(error);
-      if (errorType === 'INVALID_API_KEY') break;
-      if (errorType === 'PERMISSION_DENIED' && actualProvider !== 'agent-platform') break;
-      if (i < modelsToTry.length - 1) continue;
-    }
-  }
-
-  console.error('Lỗi phân tích tài liệu:', lastError);
-  throw new Error(getFriendlyErrorMessage(lastError).message);
+  return response.text || 'Không thể phân tích tài liệu. Vui lòng thử lại.';
 };
 
 // Interface cho cấu trúc mục SKKN (import từ types.ts nếu cần)
@@ -700,8 +686,6 @@ export const extractSKKNStructure = async (
   provider?: AiProvider
 ): Promise<{ sections: SKKNSection[], contentGuidelines?: string, pageLimitFromTemplate?: number, headerFields?: Record<string, string> }> => {
   const actualProvider: AiProvider = provider || (localStorage.getItem('google_ai_provider') as AiProvider) || 'gemini';
-  const ai = createGoogleAiClient(apiKey, actualProvider);
-
   // Giới hạn nội dung để tránh vượt token limit
   const truncatedContent = templateContent.substring(0, 25000);
 
@@ -762,80 +746,30 @@ CHỈ TRẢ VỀ JSON OBJECT, KHÔNG giải thích, KHÔNG markdown code block.
 
 BẮT ĐẦU JSON NGAY:`;
 
-  const fallbackList = actualProvider === 'agent-platform'
-    ? [...AGENT_PLATFORM_FALLBACK_MODELS]
-    : [...FALLBACK_MODELS];
-
-  const modelsToTry = selectedModel
-    ? [selectedModel, ...fallbackList.filter(m => m !== selectedModel)]
-    : [...fallbackList];
-
-  let lastError: any = null;
-
-  for (let i = 0; i < modelsToTry.length; i++) {
-    const model = modelsToTry[i];
-    try {
-      const response = await ai.models.generateContent({
-        model: model,
-        contents: prompt
-      });
-
-      const responseText = response.text || '{}';
-
-      // Cố gắng parse JSON từ response
-      let jsonText = responseText.trim();
-
-      // Remove markdown code blocks if present
-      if (jsonText.startsWith('```json')) {
-        jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-      } else if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
-      }
-
-      // Try to find JSON object first
-      const jsonObjMatch = jsonText.match(/\{[\s\S]*\}/);
-      if (jsonObjMatch) {
-        jsonText = jsonObjMatch[0];
-      }
-
-      const parsed = JSON.parse(jsonText);
-
-      // Nếu AI trả về object có sections
-      if (parsed && parsed.sections && Array.isArray(parsed.sections)) {
-        const sections: SKKNSection[] = parsed.sections.filter(
-          (s: any) => s.id && s.title && typeof s.level === 'number'
-        );
-        return {
-          sections,
-          contentGuidelines: parsed.contentGuidelines || '',
-          pageLimitFromTemplate: typeof parsed.pageLimitFromTemplate === 'number' ? parsed.pageLimitFromTemplate : 0,
-          headerFields: parsed.headerFields || {},
-        };
-      }
-
-      // Fallback: Nếu AI vẫn trả về array cũ
-      if (Array.isArray(parsed)) {
-        const sections: SKKNSection[] = parsed.filter(
-          (s: any) => s.id && s.title && typeof s.level === 'number'
-        );
-        return { sections };
-      }
-
-      return { sections: [] };
-
-    } catch (error: any) {
-      lastError = error;
-      const errorType = parseApiError(error);
-      if (errorType === 'INVALID_API_KEY') break;
-      if (errorType === 'PERMISSION_DENIED' && actualProvider !== 'agent-platform') break;
-      if (i < modelsToTry.length - 1) continue;
+  try {
+    const response = await generateContentWithFallback({
+      apiKey,
+      provider: actualProvider,
+      selectedModel,
+      contents: prompt,
+      config: { responseMimeType: 'application/json' },
+    });
+    let jsonText = (response.text || '{}').trim();
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
     }
+    const jsonObjMatch = jsonText.match(/\{[\s\S]*\}/);
+    if (jsonObjMatch) jsonText = jsonObjMatch[0];
+    const parsed = JSON.parse(jsonText);
+    if (parsed && parsed.sections && Array.isArray(parsed.sections)) return { sections: parsed.sections.filter((section: any) => section.id && section.title && typeof section.level === 'number'), contentGuidelines: parsed.contentGuidelines || '', pageLimitFromTemplate: typeof parsed.pageLimitFromTemplate === 'number' ? parsed.pageLimitFromTemplate : 0, headerFields: parsed.headerFields || {} };
+    if (Array.isArray(parsed)) return { sections: parsed.filter((section: any) => section.id && section.title && typeof section.level === 'number') };
+  } catch (error: any) {
+    console.error('Lỗi trích xuất cấu trúc SKKN:', error);
   }
-
-  console.error('Lỗi trích xuất cấu trúc SKKN:', lastError);
   return { sections: [] };
 };
-
 /**
  * Phân tích tên đề tài SKKN
  * Theo quy trình kiểm tra 3 lớp từ quy trinh kiem tra.txt
@@ -849,8 +783,6 @@ export const analyzeTitleSKKN = async (
   provider?: AiProvider
 ): Promise<TitleAnalysisResult> => {
   const actualProvider: AiProvider = provider || (localStorage.getItem('google_ai_provider') as AiProvider) || 'gemini';
-  const ai = createGoogleAiClient(apiKey, actualProvider);
-
   const prompt = `Bạn là chuyên gia phân tích tên đề tài Sáng kiến kinh nghiệm (SKKN) với 20 năm kinh nghiệm.
 
 ## THÔNG TIN ĐỀ TÀI CẦN PHÂN TÍCH:
@@ -974,68 +906,25 @@ TRẢ VỀ JSON (KHÔNG có markdown code block, CHỈ JSON thuần):
 
 BẮT ĐẦU JSON NGAY:`;
 
-  const fallbackList = actualProvider === 'agent-platform'
-    ? [...AGENT_PLATFORM_FALLBACK_MODELS]
-    : [...FALLBACK_MODELS];
-
-  const modelsToTry = selectedModel
-    ? [selectedModel, ...fallbackList.filter(m => m !== selectedModel)]
-    : [...fallbackList];
-
-  let lastError: any = null;
-
-  for (let i = 0; i < modelsToTry.length; i++) {
-    const model = modelsToTry[i];
-    try {
-      console.log(`🤖 [analyzeTitleSKKN] Đang phân tích bằng model [${i + 1}/${modelsToTry.length}]: ${model}`);
-      const response = await ai.models.generateContent({
-        model: model,
-        contents: prompt
-      });
-
-      const responseText = response.text || '{}';
-
-      // Xử lý response để lấy JSON
-      let jsonText = responseText.trim();
-
-      // Remove markdown code blocks if present
-      if (jsonText.startsWith('```json')) {
-        jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-      } else if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
-      }
-
-      // Find JSON object in response
-      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        jsonText = jsonMatch[0];
-      }
-
-      const result: TitleAnalysisResult = JSON.parse(jsonText);
-      console.log(`✅ [analyzeTitleSKKN] Phân tích thành công bằng model: ${model}`);
-      return result;
-
-    } catch (error: any) {
-      lastError = error;
-      const errorType = parseApiError(error);
-      console.warn(`⚠️ [analyzeTitleSKKN] Model ${model} gặp lỗi (${errorType}):`, error?.message || error);
-
-      // Nếu lỗi auth dừng ngay
-      if (errorType === 'INVALID_API_KEY') {
-        break;
-      }
-      if (errorType === 'PERMISSION_DENIED' && actualProvider !== 'agent-platform') {
-        break;
-      }
-
-      // Nếu còn model dự phòng, tự động chuyển sang model tiếp theo
-      if (i < modelsToTry.length - 1) {
-        console.log(`🔄 [analyzeTitleSKKN] Tự động thử model dự phòng [${i + 2}/${modelsToTry.length}]: ${modelsToTry[i + 1]}`);
-        continue;
-      }
+  try {
+    const response = await generateContentWithFallback({
+      apiKey,
+      provider: actualProvider,
+      selectedModel,
+      contents: prompt,
+      config: { responseMimeType: 'application/json' },
+    });
+    let jsonText = (response.text || '{}').trim();
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
     }
+    const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) jsonText = jsonMatch[0];
+    return JSON.parse(jsonText) as TitleAnalysisResult;
+  } catch (error: any) {
+    console.error('Lỗi phân tích đề tài:', error);
+    throw new Error(getFriendlyErrorMessage(error).message);
   }
-
-  console.error('Lỗi phân tích đề tài (đã thử tất cả model dự phòng):', lastError);
-  throw new Error(getFriendlyErrorMessage(lastError).message);
 };
