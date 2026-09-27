@@ -536,26 +536,55 @@ export function extractSkknContentFromGeneralInfo(rawMarkdown: string): string |
 
   const heading = 'THÔNG TIN CHUNG VỀ SÁNG KIẾN KINH NGHIỆM';
   const lines = rawMarkdown.replace(/\r\n?/g, '\n').split('\n');
-  const headingIndexes = lines.reduce<number[]>((indexes, line, index) => {
-    const normalized = line
-      .replace(/^\s*(?:[#>*-]+\s*)?/, '')
-      .replace(/[📌📝🔹🔸✅]/gu, '')
-      .replace(/[*_\x60]/g, '')
-      .replace(/^\s*\d+[.)-]\s*/, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toUpperCase();
+  const normalizeHeading = (line: string): string => line
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/gi, 'd')
+    .replace(/^\s*(?:[#>*-]+\s*)?/, '')
+    .replace(/[📌📝🔹🔸✅]/gu, '')
+    .replace(/[*_\x60]/g, '')
+    .replace(/^\s*(?:[ivxlcdm]+|\d+)[.)-]\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 
-    if (normalized.startsWith(heading)) indexes.push(index);
+  const headingIndexes = lines.reduce<number[]>((indexes, line, index) => {
+    const normalized = normalizeHeading(line);
+    if (normalized.startsWith('thong tin chung ve sang kien')) indexes.push(index);
     return indexes;
   }, []);
 
-  // Dàn ý thường có cùng tiêu đề ở phía trước; phần nội dung thật là lần xuất hiện cuối.
-  const headingIndex = headingIndexes.at(-1) ?? -1;
+  const lastDividerIndex = lines.reduce((lastIndex, line, index) => (
+    /^\s*(?:---+|[━─═]{5,})\s*$/.test(line) ? index : lastIndex
+  ), -1);
 
-  if (headingIndex < 0) return null;
+  // Dàn ý thường có cùng tiêu đề ở phía trước. Chỉ dùng tiêu đề xuất hiện
+  // sau dấu phân cách cuối cùng; nếu không có, sẽ thử tìm các trường biểu mẫu.
+  const headingIndex = headingIndexes.filter((index) => index > lastDividerIndex).at(-1);
+  if (headingIndex !== undefined) {
+    const content = lines.slice(headingIndex);
+    content[0] = '# ' + heading;
+    return content.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
 
-  const content = lines.slice(headingIndex);
+  // Một số phản hồi chỉ bắt đầu bằng trường biểu mẫu mà không in lại tiêu đề.
+  // Trong trường hợp đó, dùng trường cuối cùng để vẫn loại bỏ toàn bộ dàn ý phía trước.
+  const fieldIndexes = lines.reduce<number[]>((indexes, line, index) => {
+    const normalized = normalizeHeading(line);
+    if (/^(?:ten sang kien|ten de tai|linh vuc ap dung|tac gia(?: sang kien)?|don vi cong tac)\b/.test(normalized)) {
+      indexes.push(index);
+    }
+    return indexes;
+  }, []);
+  const fieldIndex = fieldIndexes.find((index) => index > lastDividerIndex) ?? fieldIndexes.at(-1);
+  if (fieldIndex !== undefined) {
+    const content = ['# ' + heading, '', ...lines.slice(fieldIndex)];
+    return content.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  const fallbackHeadingIndex = headingIndexes.at(-1);
+  if (fallbackHeadingIndex === undefined) return null;
+  const content = lines.slice(fallbackHeadingIndex);
   content[0] = '# ' + heading;
   return content.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
