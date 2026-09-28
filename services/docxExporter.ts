@@ -169,6 +169,35 @@ function parseInlineFormatting(text: string): TextRun[] {
 /**
  * Parse Markdown thành các elements
  */
+/**
+ * Kiểm tra xem dòng có phải là dòng bảng Markdown hợp lệ không.
+ * Bảng Markdown phải BẮT ĐẦU và KẾT THÚC bằng dấu `|`.
+ * Ví dụ hợp lệ: `| Cell 1 | Cell 2 |` hoặc `|---|---|`
+ * Ví dụ KHÔNG hợp lệ: `dùng "很/非常"、"都/也"` (chỉ chứa | trong text)
+ */
+function isMarkdownTableLine(line: string): boolean {
+  const trimmed = line.trim();
+  // Phải bắt đầu và kết thúc bằng | và có ít nhất 2 dấu |
+  return trimmed.startsWith('|') && trimmed.endsWith('|') && (trimmed.match(/\|/g) || []).length >= 2;
+}
+
+/**
+ * Kiểm tra xem dòng có phải dòng separator của bảng không (|---|---|)
+ */
+function isTableSeparatorLine(line: string): boolean {
+  const trimmed = line.trim();
+  return /^\|[\s\-:| ]+\|$/.test(trimmed);
+}
+
+/**
+ * Kiểm tra xem một dòng là label-value (ví dụ: **Tên sáng kiến:** nội dung)
+ * Những dòng này KHÔNG thụt đầu dòng.
+ */
+function isLabelLine(text: string): boolean {
+  // Dạng **Label:** hoặc Label:
+  return /^\*\*[^*]+:\*\*/.test(text) || /^[A-ZĐÀÁẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÈÉẺẼẸÊẾỀỂỄỆÌÍỈĨỊÒÓỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÙÚỦŨỤƯỨỪỬỮỰỲÝỶỸỴa-zđàáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ][^:]{1,40}:\s/.test(text);
+}
+
 function parseMarkdown(markdown: string): ParsedElement[] {
   const lines = markdown.split('\n');
   const elements: ParsedElement[] = [];
@@ -183,13 +212,27 @@ function parseMarkdown(markdown: string): ParsedElement[] {
       continue;
     }
 
-    // Headings
+    // Headings (markdown #)
     const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
       elements.push({
         type: 'heading',
         level: headingMatch[1].length,
         content: headingMatch[2]
+      });
+      i++;
+      continue;
+    }
+
+    // Implicit headings: dòng chữ IN HOA hoàn toàn, >=6 ký tự chữ, đứng riêng dòng
+    // Ví dụ: THÔNG TIN CHUNG VỀ SÁNG KIẾN KINH NGHIỆM
+    const plainText = line.replace(/\*\*/g, '').replace(/[^\p{L}\s]/gu, '').trim();
+    if (plainText.length >= 6 && plainText === plainText.toUpperCase() && /^[\p{Lu}\s]+$/u.test(plainText) && !/^[A-Z]+$/.test(plainText.replace(/\s/g, ''))) {
+      // Đây là heading cấp 1 implicit (toàn chữ in hoa tiếng Việt)
+      elements.push({
+        type: 'heading',
+        level: 1,
+        content: line.replace(/\*\*/g, '').trim()
       });
       i++;
       continue;
@@ -206,33 +249,50 @@ function parseMarkdown(markdown: string): ParsedElement[] {
       continue;
     }
 
-    // Unordered list
-    if (/^[-*+]\s+/.test(line)) {
+    // Unordered list (bullet: -, *, +, •)
+    if (/^[-*+•]\s+/.test(line)) {
       const items: string[] = [];
-      while (i < lines.length && /^[-*+]\s+/.test(lines[i].trim())) {
-        items.push(lines[i].trim().replace(/^[-*+]\s+/, ''));
+      while (i < lines.length && /^[-*+•]\s+/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^[-*+•]\s+/, ''));
         i++;
       }
       elements.push({ type: 'list', content: '', items, isOrdered: false });
       continue;
     }
 
-    // Table
-    if (line.includes('|')) {
-      const rows: string[][] = [];
-      while (i < lines.length && lines[i].includes('|')) {
-        const row = lines[i].split('|')
-          .map(cell => cell.trim())
-          .filter(cell => cell && !cell.match(/^[-:]+$/));
-        if (row.length > 0) {
-          rows.push(row);
+    // Table: Chỉ nhận dạng bảng Markdown hợp lệ (bắt đầu+kết thúc bằng |)
+    if (isMarkdownTableLine(line)) {
+      // Kiểm tra thêm: ít nhất 2 dòng liên tiếp là table line (header + separator hoặc data)
+      let lookAhead = i + 1;
+      let consecutiveTableLines = 1;
+      while (lookAhead < lines.length && isMarkdownTableLine(lines[lookAhead].trim())) {
+        consecutiveTableLines++;
+        lookAhead++;
+      }
+
+      // Cần ít nhất 2 dòng table liên tiếp để coi là bảng thật
+      if (consecutiveTableLines >= 2) {
+        const rows: string[][] = [];
+        while (i < lines.length && isMarkdownTableLine(lines[i].trim())) {
+          const trimmedLine = lines[i].trim();
+          // Bỏ qua dòng separator (|---|---|)
+          if (!isTableSeparatorLine(trimmedLine)) {
+            const row = trimmedLine
+              .slice(1, -1) // Bỏ | đầu và | cuối
+              .split('|')
+              .map(cell => cell.trim());
+            if (row.length > 0) {
+              rows.push(row);
+            }
+          }
+          i++;
         }
-        i++;
+        if (rows.length > 0) {
+          elements.push({ type: 'table', content: '', rows });
+        }
+        continue;
       }
-      if (rows.length > 0) {
-        elements.push({ type: 'table', content: '', rows });
-      }
-      continue;
+      // Nếu chỉ 1 dòng có |, coi như paragraph bình thường (rơi xuống dưới)
     }
 
     // Code block
@@ -277,14 +337,17 @@ function elementsToDocxChildren(elements: ParsedElement[], numberingConfig: any[
         }));
         break;
 
-      case 'paragraph':
+      case 'paragraph': {
+        // Phân biệt dòng label (không thụt) và dòng nội dung thường (thụt đầu dòng)
+        const isLabel = isLabelLine(element.content);
         children.push(new Paragraph({
           children: parseInlineFormatting(element.content),
-          indent: { firstLine: 720 },
+          indent: isLabel ? undefined : { firstLine: 720 },
           spacing: { after: 120, line: 360, lineRule: LineRuleType.AUTO },
           alignment: AlignmentType.JUSTIFIED
         }));
         break;
+      }
 
       case 'list':
         const refName = element.isOrdered ? `numbered-${listCounter}` : `bullet-${listCounter}`;
