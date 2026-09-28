@@ -515,7 +515,8 @@ function cleanMarkdownForExport(markdown: string): string {
   cleaned = cleaned.replace(/┌[─]+┐[\s\S]*?└[─]+┘/g, '');
 
   // 2. Block MENU NAVIGATION - xóa từ 📱 MENU đến hết các dòng Bước liền kề
-  cleaned = cleaned.replace(/📱\s*\**\s*MENU\s+NAVIGATION\s*\**[^\n]*(?:\n[^\n]*(?:Bước|•|\-|\*|\s*$)[^\n]*)*/g, '');
+  // CHÚ Ý: KHÔNG dùng \* vì sẽ nuốt luôn dòng markdown bold (**Tên sáng kiến:** v.v.)
+  cleaned = cleaned.replace(/📱\s*\**\s*MENU\s+NAVIGATION\s*\**[^\n]*(?:\n(?:[^\n]*Bước\s+\d+[^\n]*|[ \t]*[→►▸•][^\n]*|[ \t]*$))*/g, '');
 
   // 3. Dòng trạng thái Bước
   cleaned = cleaned.replace(/^[^\n]*Bước\s+\d+[^\n]*(?:Đang thực hiện|Chờ lệnh|Đợi lệnh|CHỜ LỆNH|ĐANG THỰC HIỆN|Hoàn thành|🔵)[^\n]*$/gm, '');
@@ -611,27 +612,27 @@ export function extractSkknContentFromGeneralInfo(rawMarkdown: string): string |
     .trim()
     .toLowerCase();
 
+  // Tìm TẤT CẢ heading "THÔNG TIN CHUNG..."
   const headingIndexes = lines.reduce<number[]>((indexes, line, index) => {
     const normalized = normalizeHeading(line);
     if (normalized.startsWith('thong tin chung ve sang kien')) indexes.push(index);
     return indexes;
   }, []);
 
-  const lastDividerIndex = lines.reduce((lastIndex, line, index) => (
-    /^\s*(?:---+|[━─═]{5,})\s*$/.test(line) ? index : lastIndex
-  ), -1);
-
-  // Dàn ý thường có cùng tiêu đề ở phía trước. Chỉ dùng tiêu đề xuất hiện
-  // sau dấu phân cách cuối cùng; nếu không có, sẽ thử tìm các trường biểu mẫu.
-  const headingIndex = headingIndexes.filter((index) => index > lastDividerIndex).at(-1);
-  if (headingIndex !== undefined) {
+  // Chiến lược: Luôn dùng heading CUỐI CÙNG trong document.
+  // Lý do: Outline (dàn ý) xuất hiện trước, nội dung chi tiết xuất hiện sau.
+  // Heading cuối cùng chính là phiên bản chi tiết nhất.
+  // BUG CŨ: dùng lastDividerIndex lọc → khi có nhiều section (PART_III, IV...)
+  // heading "THÔNG TIN CHUNG" bị lọc mất vì nằm trước divider cuối.
+  if (headingIndexes.length > 0) {
+    const headingIndex = headingIndexes.at(-1)!;
     const content = lines.slice(headingIndex);
     content[0] = '# ' + heading;
     return content.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
 
-  // Một số phản hồi chỉ bắt đầu bằng trường biểu mẫu mà không in lại tiêu đề.
-  // Trong trường hợp đó, dùng trường cuối cùng để vẫn loại bỏ toàn bộ dàn ý phía trước.
+  // Fallback: Không tìm thấy heading, dùng trường biểu mẫu đầu tiên
+  // (Tên sáng kiến, Lĩnh vực, Tác giả, Đơn vị)
   const fieldIndexes = lines.reduce<number[]>((indexes, line, index) => {
     const normalized = normalizeHeading(line);
     if (/^(?:ten sang kien|ten de tai|linh vuc ap dung|tac gia(?: sang kien)?|don vi cong tac)\b/.test(normalized)) {
@@ -639,17 +640,22 @@ export function extractSkknContentFromGeneralInfo(rawMarkdown: string): string |
     }
     return indexes;
   }, []);
-  const fieldIndex = fieldIndexes.find((index) => index > lastDividerIndex) ?? fieldIndexes.at(-1);
-  if (fieldIndex !== undefined) {
+
+  // Tìm divider ĐẦU TIÊN (phân cách outline vs nội dung)
+  const firstDividerIndex = lines.findIndex(line => /^\s*(?:---+|[━─═]{5,})\s*$/.test(line));
+
+  if (fieldIndexes.length > 0) {
+    // Ưu tiên: trường ĐẦU TIÊN sau divider đầu tiên (nội dung chi tiết)
+    // Fallback: trường ĐẦU TIÊN trong toàn document
+    const fieldIndex = (firstDividerIndex >= 0
+      ? fieldIndexes.find(i => i > firstDividerIndex)
+      : null
+    ) ?? fieldIndexes[0];
     const content = ['# ' + heading, '', ...lines.slice(fieldIndex)];
     return content.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
 
-  const fallbackHeadingIndex = headingIndexes.at(-1);
-  if (fallbackHeadingIndex === undefined) return null;
-  const content = lines.slice(fallbackHeadingIndex);
-  content[0] = '# ' + heading;
-  return content.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return null;
 }
 
 /**
