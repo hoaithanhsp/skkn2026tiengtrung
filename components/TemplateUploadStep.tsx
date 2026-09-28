@@ -218,7 +218,7 @@ export const TemplateUploadStep: React.FC<Props> = ({
                         <Sparkles className="w-10 h-10 text-white drop-shadow-lg" />
                     </div>
                     {/* Title with shimmer gradient */}
-                    <h1 className="text-4xl md:text-5xl font-black mb-3 hero-title tracking-tight" style={{ fontFamily: 'Nunito, sans-serif' }}>
+                    <h1 className="text-3xl md:text-4xl font-black mb-3 pt-1 leading-[1.2] hero-title tracking-tight" style={{ fontFamily: 'Nunito, sans-serif' }}>
                         SKKN 2026 TIẾNG TRUNG
                     </h1>
                     <p className="mt-2 text-sm font-medium text-orange-700">
