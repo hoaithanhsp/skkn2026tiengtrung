@@ -21,6 +21,7 @@ import { SKKNForm } from './components/SKKNForm';
 import { TemplateUploadStep } from './components/TemplateUploadStep';
 
 import { DocumentPreview } from './components/DocumentPreview';
+import { extractSkknContentFromGeneralInfo, cleanMarkdownForExport } from './services/docxExporter';
 
 import { Button } from './components/Button';
 
@@ -497,6 +498,25 @@ const App: React.FC = () => {
     solution5: null,
 
   });
+
+
+
+  // Nội dung preview = ĐÚNG nội dung sẽ xuất Word (không còn lệch outline vs chi tiết)
+  // Khi đang ở bước OUTLINE: hiển thị fullDocument (dàn ý)
+  // Khi đã có nội dung chi tiết: trích xuất + clean giống hệt Word export
+  const previewContent = useMemo(() => {
+    if (!state.fullDocument) return '';
+    // Ở bước OUTLINE hoặc đang streaming dàn ý: hiển thị nguyên bản
+    if (state.step <= GenerationStep.OUTLINE) {
+      return state.fullDocument;
+    }
+    // Đã có nội dung chi tiết → trích xuất giống Word
+    const extracted = extractSkknContentFromGeneralInfo(state.fullDocument);
+    if (extracted) {
+      return cleanMarkdownForExport(extracted);
+    }
+    return state.fullDocument;
+  }, [state.fullDocument, state.step]);
 
 
 
@@ -3604,7 +3624,9 @@ ${CONCLUSION_GUIDE}
         return;
       }
 
-      const { exportMarkdownToDocx, extractSkknContentFromGeneralInfo } = await import('./services/docxExporter');
+      // extractSkknContentFromGeneralInfo và cleanMarkdownForExport đã import static ở đầu file
+      // Chỉ dynamic import exportMarkdownToDocx vì nó kéo docx lib nặng
+      const { exportMarkdownToDocx } = await import('./services/docxExporter');
 
       const exportableContent = extractSkknContentFromGeneralInfo(state.fullDocument);
       if (!exportableContent) {
@@ -5090,7 +5112,7 @@ Tổ: [Tổ chuyên môn]
 
             <DocumentPreview
 
-              content={state.fullDocument}
+              content={previewContent}
 
               onUpdate={handleDocumentUpdate}
 

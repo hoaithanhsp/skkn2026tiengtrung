@@ -1,3 +1,269 @@
+---
+name: google-ai-api-key-validation
+description: Update codebases that validate Google AI Studio, Gemini, or Generative Language API keys so both legacy keys starting with AIzaSy and new keys starting with AQ are accepted. Use when an app rejects Gemini/Google AI API keys, shows "Invalid API Key", hard-codes startsWith("AIza") or startsWith("AIzaSy"), or needs a reusable regex/helper for API key format validation across frontend, backend, env parsing, settings modals, or key rotation managers.
+---
+
+# Google AI API Key Validation
+
+## Goal
+
+Update API key validation without changing actual Google API calls. The app should stop rejecting user-entered Google AI/Gemini keys that start with `AQ`, while still accepting legacy keys that start with `AIzaSy`.
+
+## Workflow
+
+1. Search the codebase for likely validators and user-facing copy:
+   - `AIza`, `AIzaSy`, `AQ`
+   - `Invalid API Key`, `API Key khong hop le`, `Key phai bat dau`
+   - `startsWith`, regex literals, `apiKey`, `api_key`, `GEMINI_API_KEY`, `VITE_GEMINI_API_KEYS`
+2. Inspect every validation path, not only the visible input modal:
+   - settings or API key modal
+   - localStorage/sessionStorage migration
+   - env key parsing
+   - key manager or key rotation logic
+   - backend request validation, if present
+   - bundled production output only if the project commits build artifacts
+3. Replace prefix-only checks such as `key.startsWith("AIza")` with a shared helper where the project style allows it.
+4. Update UI copy and placeholders so users see `AIzaSy... or AQ...`, not only `AIza...`.
+5. Build or run the narrowest available validation command. If there are pre-existing unrelated type or lint failures, report them clearly.
+
+## Recommended Regex
+
+Prefer a permissive prefix validator:
+
+```ts
+const GOOGLE_AI_API_KEY_PATTERN = /^(?:AIzaSy|AQ)\S{8,}$/;
+```
+
+Use the same pattern in JavaScript, TypeScript, Python, or other languages:
+
+- Accepts `AIzaSy...`
+- Accepts `AQ...`
+- Rejects empty strings, whitespace-containing keys, and unrelated prefixes
+- Avoids overfitting the unknown tail of the newer `AQ` format
+
+If an existing app intentionally validates a stricter character set and there is confirmed product documentation for the key body, keep the stricter body but still include both prefixes:
+
+```ts
+const GOOGLE_AI_API_KEY_PATTERN = /^(?:AIzaSy|AQ)[A-Za-z0-9_-]{8,}$/;
+```
+
+## Helper Pattern
+
+For TypeScript/JavaScript projects, prefer a small shared helper instead of duplicating regexes:
+
+```ts
+export const GOOGLE_AI_API_KEY_PATTERN = /^(?:AIzaSy|AQ)\S{8,}$/;
+
+export const isValidGoogleAiApiKey = (key: string): boolean => {
+  return GOOGLE_AI_API_KEY_PATTERN.test(key.trim());
+};
+```
+
+For Python:
+
+```python
+import re
+
+GOOGLE_AI_API_KEY_PATTERN = re.compile(r"^(?:AIzaSy|AQ)\S{8,}$")
+
+def is_valid_google_ai_api_key(key: str) -> bool:
+    return bool(GOOGLE_AI_API_KEY_PATTERN.match(key.strip()))
+```
+
+## Guardrails
+
+- Do not log full API keys. If display is needed, mask keys with prefix plus last four characters.
+- Do not remove server-side authentication or actual API error handling.
+- Do not treat a real 401/403 response from Google as a format-validation issue.
+- Do not edit unrelated generated bundles unless the repository clearly commits and serves `dist` or equivalent build output.
+- Do not run destructive git commands. Preserve user changes.
+
+## Script
+
+Use `scripts/scan_google_ai_key_validation.py <project-root>` to find likely files that still hard-code `AIza` validation or old API key copy. The script is read-only and prints file, line number, and matching pattern.
+
+---
+name: gemini-model-overload-fallback
+description: Update codebases that call Google AI Studio, Gemini, or Generative Language APIs so transient model overload errors are handled correctly. Use when an app logs or displays 503, UNAVAILABLE, "This model is currently experiencing high demand", "model overloaded", "try again later", or when Gemini calls use a single selected model without fallback and incorrectly surface the issue as Invalid API Key, quota, or a hard failure.
+---
+
+# Gemini Model Overload Fallback
+
+## Goal
+
+Make Gemini-powered apps resilient to temporary Google model overloads. A `503 UNAVAILABLE` or "high demand" response is a model/service availability issue, not an API key format, auth, or quota problem.
+
+## Workflow
+
+1. Search the codebase for Gemini call sites and error handling:
+   - `503`, `UNAVAILABLE`, `high demand`, `overloaded`, `try again later`
+   - `generateContent`, `generateContentStream`, `sendMessageStream`
+   - `parseApiError`, `getFriendlyErrorMessage`, `Invalid API Key`, `INVALID_API_KEY`
+   - `FALLBACK_MODELS`, `selectedModel`, `model`, `apiKeyManager`, `markKeyError`
+2. Run `scripts/scan_gemini_model_overload.py <project-root>` for a quick read-only scan.
+3. Confirm the error category:
+   - `401`, `API_KEY_INVALID`, `PERMISSION_DENIED` => auth/key issue.
+   - `429`, `RESOURCE_EXHAUSTED`, quota text => quota/rate limit issue.
+   - `503`, `UNAVAILABLE`, `high demand`, `overloaded` => model overload; do not blame the API key.
+4. Add or reuse a model fallback list. Keep the user's selected model first, then try stable/cheaper fallbacks.
+5. Add a dedicated error type such as `MODEL_OVERLOADED` before generic `UNKNOWN` handling.
+6. Apply fallback loops to every Gemini path, especially one-off analysis helpers that call `ai.models.generateContent` directly.
+7. Keep API key rotation separate. Do not mark keys invalid, error, or cooldown for `MODEL_OVERLOADED`.
+8. Update user-facing copy so the app says the model is temporarily overloaded and suggests retrying or selecting a lighter model.
+9. Build or run the narrowest validation command.
+
+## Current Free Gemini Models
+
+Last checked against official Google AI Gemini API docs and pricing on 2026-07-17.
+
+For general `generateContent` / `generateContentStream` fallback in free-tier apps, prefer stable text-output models that list free input and output pricing:
+
+```ts
+const FREE_GENERAL_GEMINI_MODELS = [
+  'gemini-3.1-flash-lite', // stable, lowest-cost current general model; good for extraction, translation, routing, summaries
+  'gemini-3.5-flash',      // stable, strongest current Flash model for reasoning, coding, multimodal understanding
+  'gemini-2.5-flash-lite', // stable older cheap fallback; useful when Gemini 3 capacity is constrained
+  'gemini-2.5-flash',      // stable older balanced fallback
+  'gemini-2.5-pro'         // stable older high-reasoning fallback; use later because it is heavier
+];
+```
+
+If the project accepts preview models, include `gemini-3-flash-preview` after the stable Gemini 3 options and before Gemini 2.5 fallbacks:
+
+```ts
+const FREE_GENERAL_GEMINI_MODELS_WITH_PREVIEW = [
+  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-3-flash-preview',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro'
+];
+```
+
+Do not add paid-only or specialized models to a generic free fallback list unless the app explicitly uses that modality:
+
+- `gemini-3.1-pro-preview` and `gemini-3.1-pro-preview-customtools` are not available on the Free tier.
+- `gemini-omni-flash-preview`, `gemini-3.1-flash-image`, `gemini-3.1-flash-lite-image`, and `gemini-3-pro-image` are paid-only or specialized media endpoints.
+- TTS, Live, Live Translate, image generation, embeddings, and video models should have separate routing because their request/response shapes and pricing differ from normal text-output `generateContent`.
+- Gemini 2.0 models are shut down; do not keep `gemini-2.0-flash` or `gemini-2.0-flash-lite` in fallback arrays.
+
+When editing apps, keep the user's selected model first, then append this ordered free fallback list without duplicates. If the app stores a default model and has no user choice, prefer `gemini-3.1-flash-lite` for low-cost utility apps and `gemini-3.5-flash` for coding, reasoning, or agentic workflows. Check the live Google AI pricing and models pages again before changing this list because model availability and free-tier access can change.
+
+## TypeScript Pattern
+
+Use the existing model constants if the app already has them. Otherwise define a conservative ordered list:
+
+```ts
+const FALLBACK_MODELS = [
+  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro'
+];
+```
+
+Detect overload separately from auth and quota:
+
+```ts
+export const parseApiError = (error: any): string => {
+  const message = error?.message || error?.toString() || '';
+  const serialized = JSON.stringify(error) || '';
+
+  if (
+    serialized.includes('429') ||
+    message.includes('RESOURCE_EXHAUSTED') ||
+    message.toLowerCase().includes('quota')
+  ) return 'QUOTA_EXCEEDED';
+
+  if (
+    serialized.includes('503') ||
+    message.includes('UNAVAILABLE') ||
+    message.toLowerCase().includes('high demand') ||
+    message.toLowerCase().includes('overloaded')
+  ) return 'MODEL_OVERLOADED';
+
+  if (
+    message.includes('API_KEY_INVALID') ||
+    message.includes('401') ||
+    message.includes('PERMISSION_DENIED')
+  ) return 'INVALID_API_KEY';
+
+  return 'UNKNOWN';
+};
+```
+
+For non-streaming `generateContent` helpers:
+
+```ts
+const getOrderedModels = (selectedModel?: string): string[] => {
+  if (!selectedModel || !FALLBACK_MODELS.includes(selectedModel)) return FALLBACK_MODELS;
+  return [selectedModel, ...FALLBACK_MODELS.filter((model) => model !== selectedModel)];
+};
+
+const generateContentWithModelFallback = async ({
+  apiKey,
+  selectedModel,
+  contents,
+  config,
+}: {
+  apiKey: string;
+  selectedModel?: string;
+  contents: any;
+  config?: any;
+}) => {
+  const ai = new GoogleGenAI({ apiKey });
+  let lastError: any = null;
+
+  for (const model of getOrderedModels(selectedModel)) {
+    try {
+      return await ai.models.generateContent({
+        model,
+        contents,
+        ...(config ? { config } : {}),
+      });
+    } catch (error: any) {
+      lastError = error;
+      if (parseApiError(error) === 'INVALID_API_KEY') break;
+    }
+  }
+
+  throw lastError || new Error('All Gemini models failed. Please try again later.');
+};
+```
+
+For streaming calls, the same loop is appropriate, but preserve chat history only after a full successful response. If partial chunks already reached the UI before a stream fails, clear or annotate the partial output before retrying with another model.
+
+## Key Rotation Guard
+
+If the app has an API key manager, keep overload errors from poisoning key state:
+
+```ts
+if (errorType === 'MODEL_OVERLOADED') {
+  keyInfo.lastError = errorType;
+  saveToStorage();
+  return {
+    success: false,
+    hasMoreKeys: hasAvailableKeys(),
+    message: 'Model is temporarily overloaded; API key remains active.',
+  };
+}
+```
+
+Only rotate or cooldown keys for quota and rate limit errors. Only mark keys invalid for authentication errors.
+
+## Validation
+
+After edits:
+
+1. Run the scan script again and inspect remaining direct `generateContent` call sites.
+2. Run the project build, for example `npm run build`.
+3. Confirm the app no longer shows "Invalid API Key" for a `503` overload.
+4. Confirm logs show fallback attempts across models.
+
+Build warnings about bundle size or third-party `eval` are not overload fixes unless they fail the build.
+
 # 📋 QUY TẮC PHÁT TRIỂN & TỐI ƯU GEMINI API & AGENT PLATFORM API
 
 > **Phiên bản:** 4.1 — cập nhật 09/08/2026  
@@ -15,7 +281,8 @@
 | 1 | `gemini-3.6-flash` | Stable/GA (21/07/2026) | 1,048,576 | 65,536 | Mặc định; lập bản đồ nội dung và viết giáo án chi tiết |
 | 2 | `gemini-3.5-flash` | Stable/GA | 1,048,576 | 65,536 | Dự phòng chất lượng cao |
 | 3 | `gemini-3.5-flash-lite` | Stable/GA (21/07/2026) | 1,048,576 | 65,536 | Dự phòng nhanh, chi phí thấp, đọc/trích xuất tài liệu tốt |
-| 4 | `gemini-3.1-flash-lite` | Stable; dự kiến ngừng sớm nhất 07/05/2027 | 1,048,576 | 65,536 | Tương thích ngược / Dự phòng cuối chuỗi |
+| 4 | `gemini-3.1-flash-lite` | Stable; dự kiến ngừng sớm nhất 07/05/2027 | 1,048,576 | 65,536 | Tương thích ngược |
+| 5 | `gemini-2.5-flash` | Stable | 1,048,576 | 65,536 | Dự phòng cuối chuỗi |
 
 ### Kết luận lựa chọn model
 
@@ -29,7 +296,6 @@
 
 | Model | Lý do | Thay bằng |
 |---|---|---|
-| `gemini-2.5-flash` | Đã ngừng cung cấp cho người dùng mới (08/2026) | `gemini-3.6-flash` hoặc `gemini-3.5-flash` |
 | `gemini-3-pro-preview` | Đã shutdown 09/03/2026 | `gemini-3.1-pro-preview` khi thực sự cần Pro |
 | `gemini-3.1-flash-lite-preview` | Đã shutdown 25/05/2026 | `gemini-3.5-flash-lite` |
 | `gemini-2.0-flash`, `gemini-2.0-flash-lite` | Đã shutdown 01/06/2026 | `gemini-3.6-flash` hoặc `gemini-3.5-flash-lite` |
@@ -53,7 +319,7 @@ Dưới đây là danh sách cập nhật các model khả dụng nếu dùng **
 | Model | Model ID | Nên dùng khi |
 |---|---|---|
 | ⭐ Gemini 2.5 Pro | `gemini-2.5-pro` | Suy luận mạnh, viết code, xử lý tài liệu dài, giáo án, toán học |
-| Gemini 2.5 Flash (Legacy) | `gemini-2.5-flash` | *Đã ngừng cung cấp cho người dùng mới (08/2026)* |
+| ⭐ Gemini 2.5 Flash | `gemini-2.5-flash` | Chat, tool AI, tốc độ nhanh, giá rẻ |
 | ⭐ Gemini 2.5 Flash Lite | `gemini-2.5-flash-lite` | Chatbot số lượng lớn, automation, chi phí thấp |
 | Gemini 2.5 Flash Live | `gemini-2.5-flash-live-preview` | Voice realtime |
 | Gemini 2.5 Flash TTS | `gemini-2.5-flash-tts-preview` | Text to Speech |
@@ -92,7 +358,7 @@ Các model 3.x mang lại khả năng lập kế hoạch (agentic), viết code 
 | Phân tích giáo án, Sinh đề kiểm tra | `gemini-2.5-pro` | Đòi hỏi suy luận logic, đọc hiểu văn bản dài, bám sát cấu trúc bài học. |
 | Viết giáo án, Tạo phiếu học tập | `gemini-2.5-pro` | Yêu cầu chất lượng cao, format chuẩn xác và nội dung sư phạm tốt. |
 | Prompt Engineer, Chuyển Word/PDF | `gemini-2.5-pro` | Khả năng trích xuất chính xác và tuân thủ system prompt tốt. |
-| Chat AI thông thường, Hỏi đáp nhanh | `gemini-3.5-flash-lite` hoặc `gemini-3.6-flash` | Tốc độ phản hồi tức thì, tiết kiệm chi phí cho các câu hỏi đơn giản. |
+| Chat AI thông thường, Hỏi đáp nhanh | `gemini-2.5-flash` | Tốc độ phản hồi tức thì, tiết kiệm chi phí cho các câu hỏi đơn giản. |
 | Viết code HTML/JS, App Toán học/TikZ | `gemini-3.6-flash` hoặc `gemini-3.5-flash` | Mạnh mẽ trong logic lập trình, lập luận đa bước khi sinh mã. |
 | Tạo ảnh minh họa bài học | `nano-banana` | Tạo và chỉnh sửa ảnh trực tiếp, phù hợp làm tài nguyên học liệu. |
 | Tạo video bài giảng, minh họa | `veo-3.1-generate-preview` | Sinh video chất lượng cao từ text prompt. |
@@ -117,9 +383,10 @@ for model in client.models.list():
 → gemini-3.5-flash
 → gemini-3.5-flash-lite
 → gemini-3.1-flash-lite
+→ gemini-2.5-flash
 ```
 
-Danh sách được loại trùng và tự động bỏ qua các model cũ đã ngừng cung cấp (như `gemini-2.5-flash`). Model người dùng chọn luôn được thử trước, kể cả khi không nằm trong chuỗi mặc định.
+Danh sách được loại trùng. Model người dùng chọn luôn được thử trước, kể cả khi không nằm trong chuỗi mặc định.
 
 ### Lỗi được phép chuyển model
 
@@ -128,21 +395,19 @@ Danh sách được loại trùng và tự động bỏ qua các model cũ đã 
 - `504 DEADLINE_EXCEEDED`
 - text chứa `overloaded`, `high demand`, `try again later`, `temporarily unavailable`
 - `404 NOT_FOUND` khi model/endpoint không còn khả dụng
-- Lỗi model deprecated / `no longer available` / `is not found`
-- `403 PERMISSION_DENIED` trên Agent Platform API
 
 ### Lỗi phải dừng ngay, không chuyển model
 
 - `401`, `API_KEY_INVALID`: key sai/hết hạn.
-- `403`, `PERMISSION_DENIED` (Gemini API thông thường): key không có quyền.
+- `403`, `PERMISSION_DENIED`: key không có quyền.
 - `429`, `RESOURCE_EXHAUSTED`: quota/rate limit; không được đánh dấu key là invalid.
-- `400`, `INVALID_ARGUMENT`: payload hoặc tham số model sai (ngoại trừ lỗi model deprecated).
+- `400`, `INVALID_ARGUMENT`: payload hoặc tham số model sai.
 - Lỗi không xác định: dừng để không phát sinh nhiều request ngoài ý muốn.
 
 ### Yêu cầu triển khai
 
 - Mọi `generateContent` đều phải đi qua một hàm fallback duy nhất, gồm cả phân tích mẫu, trích lịch, gợi ý phương pháp, lập bản đồ nội dung, viết và sửa giáo án.
-- Khi fallback, console/UI thông báo model nguồn, model đích và lý do; không làm mất kết quả bước trước.
+- Khi fallback, UI thông báo model nguồn, model đích và lý do; không làm mất kết quả bước trước.
 - Không hiển thị lỗi 503 thành “API key không hợp lệ”.
 - Không log full API key.
 
@@ -152,6 +417,7 @@ const FALLBACK_MODELS = [
   'gemini-3.5-flash',
   'gemini-3.5-flash-lite',
   'gemini-3.1-flash-lite',
+  'gemini-2.5-flash',
 ];
 
 for (const model of getOrderedModels(selectedModel)) {
@@ -159,7 +425,7 @@ for (const model of getOrderedModels(selectedModel)) {
     return await callGemini(model, request);
   } catch (error) {
     const type = parseApiError(error);
-    if (type !== 'MODEL_OVERLOADED' && type !== 'MODEL_DEPRECATED' && type !== 'NOT_FOUND') throw error;
+    if (type !== 'MODEL_OVERLOADED' && type !== 'NOT_FOUND') throw error;
   }
 }
 ```
@@ -209,19 +475,20 @@ Danh sách khởi đầu an toàn cho các app giáo dục:
 
 ```ts
 export const AGENT_PLATFORM_MODELS = [
+  'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
   'gemini-2.5-pro',
   'gemini-3.1-pro-preview',
 ] as const;
 
 export const AGENT_PLATFORM_FALLBACK_MODELS = [
+  'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
-  'gemini-2.5-pro',
 ] as const;
 ```
 
-- Model mặc định của Agent Platform API: `gemini-2.5-flash-lite`.
-- Khi chuyển từ Gemini API sang Agent Platform API, nếu model đang chọn không tương thích thì tự đưa về `gemini-2.5-flash-lite`.
+- Model mặc định của Agent Platform API: `gemini-2.5-flash`.
+- Khi chuyển từ Gemini API sang Agent Platform API, nếu model đang chọn không tương thích thì tự đưa về `gemini-2.5-flash`.
 - Chỉ hiển thị model Agent Platform hỗ trợ trong giao diện của dịch vụ này.
 - Danh sách model có thể thay đổi; phải kiểm tra tài liệu Agent Platform chính thức trước mỗi đợt release lớn.
 
@@ -324,7 +591,7 @@ const GOOGLE_AI_API_KEY_PATTERN = /^(?:AIzaSy|AQ)\S{8,}$/;
 - [ ] Có lựa chọn thủ công giữa Gemini API và Agent Platform API.
 - [ ] Key Gemini và Agent Platform được lưu riêng, không ghi đè nhau.
 - [ ] Key `AQ...` không làm app tự chuyển provider.
-- [ ] Model Agent Platform được lọc riêng và mặc định về `gemini-2.5-flash-lite` khi model cũ không tương thích.
+- [ ] Model Agent Platform được lọc riêng và mặc định về `gemini-2.5-flash` khi model cũ không tương thích.
 - [ ] Mọi tác vụ streaming, non-streaming, JSON và DOCX đều đi qua client factory chung.
 - [ ] Agent Platform không dùng nhầm bộ xoay key Gemini.
 - [ ] Không còn chữ “Vertex AI Express” trên giao diện.

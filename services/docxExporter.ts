@@ -502,7 +502,7 @@ function generateSKKNHeader(
 /**
  * Lọc bỏ các lệnh điều hướng và hướng dẫn của AI khỏi nội dung xuất Word.
  */
-function cleanMarkdownForExport(markdown: string): string {
+export function cleanMarkdownForExport(markdown: string): string {
   if (!markdown) return markdown;
 
   let cleaned = markdown;
