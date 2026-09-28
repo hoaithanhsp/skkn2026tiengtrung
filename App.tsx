@@ -4128,7 +4128,7 @@ Tổ: [Tổ chuyên môn]
 
         <div className="mb-8">
 
-          <h1 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-sky-500 flex items-center gap-2" style={{ fontFamily: 'Nunito, sans-serif' }}>
+          <h1 className="text-lg font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-sky-500 flex items-center gap-2 whitespace-nowrap" style={{ fontFamily: 'Nunito, sans-serif' }}>
 
             <Wand2 className="h-6 w-6 text-orange-500" />
 
@@ -4136,7 +4136,7 @@ Tổ: [Tổ chuyên môn]
 
           </h1>
 
-          <p className="text-xs text-slate-600 font-medium mt-1">Dương Thị Vinh - Trường THPT chuyên Chu Văn An</p>
+          <p className="text-[10px] text-slate-600 font-medium mt-1 whitespace-nowrap tracking-tight">Dương Thị Vinh - Trường THPT chuyên Chu Văn An</p>
 
           <p className="text-xs text-orange-800 font-medium mt-1.5 tracking-wide">✨ TRỢ LÝ VIẾT MỌI MẪU SKKN CÁC SỞ</p>
 
