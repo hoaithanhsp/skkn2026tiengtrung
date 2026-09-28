@@ -4267,7 +4267,7 @@ Tổ: [Tổ chuyên môn]
 
         <div className="mt-auto pt-6 border-t border-gray-100">
 
-          {state.step > GenerationStep.INPUT_FORM && currentProvider === 'gemini' && (
+          {state.step > GenerationStep.INPUT_FORM && (
 
             <div className="space-y-3">
 
